@@ -1,7 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 #include "pch.h"
-
 #include "DBStorage.h"
 
 namespace winrt
@@ -173,7 +172,7 @@ namespace
         }
     };
 
-    // Appends argcount variables to prefix in a comma-separated list.
+    // Appends argCount variables to prefix in a comma-separated list.
     std::string MakeSQLiteParameterizedStatement(const char *prefix, int argCount)
     {
         assert(argCount != 0);
@@ -293,7 +292,7 @@ DBStorage::~DBStorage()
         // If there is an in-progress async task, cancel it and wait on the
         // condition_variable for the async task to acknowledge cancellation by
         // nulling out m_action. Once m_action is null, it is safe to proceed
-        // wth closing the DB connection
+        // with closing the DB connection
         slim_shared_lock_guard guard{m_lock};
         swap(tasks, m_tasks);
         if (m_action) {
@@ -318,18 +317,16 @@ std::string DBStorage::ConvertWstrToStr(const std::wstring &wstr)
 
 // Under the lock, add a task to m_tasks and, if no async task is in progress,
 // schedule it
-void DBStorage::AddTask(DBStorage::DBTask::Type type,
-                        std::vector<winrt::Microsoft::ReactNative::JSValue> &&args,
-                        DBStorage::Callback &&jsCallback)
+void DBStorage::AddTask(std::unique_ptr<DBTask> task)
 {
     winrt::slim_lock_guard guard(m_lock);
-    m_tasks.emplace_back(type, std::move(args), std::move(jsCallback));
+    m_tasks.push_back(std::move(task));
     if (!m_action) {
         m_action = RunTasks();
     }
 }
 
-// On a background thread, while the async task  has not been cancelled and
+// On a background thread, while the async task  has not been canceled and
 // there are more tasks to do, run the tasks. When there are either no more
 // tasks or cancellation has been requested, set m_action to null to report
 // that and complete the coroutine. N.B., it is important that detecting that
@@ -355,7 +352,7 @@ winrt::Windows::Foundation::IAsyncAction DBStorage::RunTasks()
         }
 
         for (auto &task : tasks) {
-            task.Run(db);
+            task->Run(db);
             if (cancellationToken())
                 break;
         }
@@ -365,28 +362,7 @@ winrt::Windows::Foundation::IAsyncAction DBStorage::RunTasks()
     m_cv.notify_all();
 }
 
-void DBStorage::DBTask::Run(sqlite3 *db)
-{
-    switch (m_type) {
-        case Type::multiGet:
-            multiGet(db);
-            break;
-        case Type::multiSet:
-            multiSet(db);
-            break;
-        case Type::multiRemove:
-            multiRemove(db);
-            break;
-        case Type::clear:
-            clear(db);
-            break;
-        case Type::getAllKeys:
-            getAllKeys(db);
-            break;
-    }
-}
-
-void DBStorage::DBTask::multiGet(sqlite3 *db)
+void DBStorage::MultiGetTask::Run(sqlite3 *db)
 {
     if (!CheckArgs(db, m_args, m_callback)) {
         return;
@@ -432,7 +408,7 @@ void DBStorage::DBTask::multiGet(sqlite3 *db)
     m_callback(callbackParams);
 }
 
-void DBStorage::DBTask::multiSet(sqlite3 *db)
+void DBStorage::MultiSetTask::Run(sqlite3 *db)
 {
     Sqlite3Transaction transaction(db, m_callback);
     if (!transaction) {
@@ -464,7 +440,7 @@ void DBStorage::DBTask::multiSet(sqlite3 *db)
     m_callback(callbackParams);
 }
 
-void DBStorage::DBTask::multiRemove(sqlite3 *db)
+void DBStorage::MultiRemoveTask::Run(sqlite3 *db)
 {
     if (!CheckArgs(db, m_args, m_callback)) {
         return;
@@ -494,7 +470,7 @@ void DBStorage::DBTask::multiRemove(sqlite3 *db)
     m_callback(callbackParams);
 }
 
-void DBStorage::DBTask::getAllKeys(sqlite3 *db)
+void DBStorage::GetAllKeysTask::Run(sqlite3 *db)
 {
     winrt::JSValueArray result;
     auto getAllKeysCallback = [&](int cCol, char **rgszColText, char **) {
@@ -514,7 +490,7 @@ void DBStorage::DBTask::getAllKeys(sqlite3 *db)
     }
 }
 
-void DBStorage::DBTask::clear(sqlite3 *db)
+void DBStorage::ClearTask::Run(sqlite3 *db)
 {
     if (Exec(db, m_callback, u8"DELETE FROM AsyncLocalStorage")) {
         std::vector<winrt::JSValue> callbackParams;

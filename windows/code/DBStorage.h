@@ -3,7 +3,6 @@
 #pragma once
 
 #include <winsqlite/winsqlite3.h>
-
 #include "NativeModules.h"
 
 class DBStorage
@@ -12,15 +11,9 @@ public:
     typedef std::function<void(std::vector<winrt::Microsoft::ReactNative::JSValue> const &)>
         Callback;
 
-    class DBTask
-    {
-    public:
-        enum class Type { multiGet, multiSet, multiRemove, clear, getAllKeys };
-
-        DBTask(Type type,
-               std::vector<winrt::Microsoft::ReactNative::JSValue> &&args,
-               Callback &&callback)
-            : m_type{type}, m_args{std::move(args)}, m_callback{std::move(callback)}
+    struct DBTask {
+        DBTask(std::vector<winrt::Microsoft::ReactNative::JSValue> &&args, Callback &&callback)
+            : m_args{std::move(args)}, m_callback{std::move(callback)}
         {
         }
 
@@ -28,33 +21,59 @@ public:
         DBTask(DBTask &&) = default;
         DBTask &operator=(const DBTask &) = delete;
         DBTask &operator=(DBTask &&) = default;
-        void Run(sqlite3 *db);
 
-    private:
-        Type m_type;
+        virtual ~DBTask()
+        {
+        }
+
+        virtual void Run(sqlite3 *db) = 0;
+
+    protected:
         std::vector<winrt::Microsoft::ReactNative::JSValue> m_args;
         Callback m_callback;
+    };
 
-        void multiGet(sqlite3 *db);
-        void multiSet(sqlite3 *db);
-        void multiRemove(sqlite3 *db);
-        void clear(sqlite3 *db);
-        void getAllKeys(sqlite3 *db);
+    struct MultiGetTask : DBTask {
+        using DBTask::DBTask;
+        void Run(sqlite3 *db) override;
+    };
+
+    struct MultiSetTask : DBTask {
+        using DBTask::DBTask;
+        void Run(sqlite3 *db) override;
+    };
+
+    struct MultiRemoveTask : DBTask {
+        using DBTask::DBTask;
+        void Run(sqlite3 *db) override;
+    };
+
+    struct ClearTask : DBTask {
+        using DBTask::DBTask;
+        void Run(sqlite3 *db) override;
+    };
+
+    struct GetAllKeysTask : DBTask {
+        using DBTask::DBTask;
+        void Run(sqlite3 *db) override;
     };
 
     DBStorage();
     ~DBStorage();
 
-    void AddTask(DBTask::Type type,
-                 std::vector<winrt::Microsoft::ReactNative::JSValue> &&args,
-                 Callback &&jsCallback);
-
-    void AddTask(DBTask::Type type, Callback &&jsCallback)
+    template <typename Task>
+    void AddTask(std::vector<winrt::Microsoft::ReactNative::JSValue> &&args, Callback &&jsCallback)
     {
-        AddTask(type,
-                std::move(std::vector<winrt::Microsoft::ReactNative::JSValue>()),
-                std::move(jsCallback));
+        AddTask(std::make_unique<Task>(std::move(args), std::move(jsCallback)));
     }
+
+    template <typename Task>
+    void AddTask(Callback &&jsCallback)
+    {
+        AddTask<Task>({}, std::move(jsCallback));
+    }
+
+    void AddTask(std::unique_ptr<DBTask> task);
 
     winrt::Windows::Foundation::IAsyncAction RunTasks();
 
@@ -65,7 +84,7 @@ private:
     winrt::slim_mutex m_lock;
     winrt::slim_condition_variable m_cv;
     winrt::Windows::Foundation::IAsyncAction m_action{nullptr};
-    std::vector<DBTask> m_tasks;
+    std::vector<std::unique_ptr<DBTask>> m_tasks;
 
     std::string ConvertWstrToStr(const std::wstring &wstr);
 };
