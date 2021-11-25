@@ -13,7 +13,7 @@ namespace winrt::ReactNativeAsyncStorage::implementation
         DBStorage dbStorage;
 
         REACT_METHOD(multiGet);
-        void multiGet(std::vector<JSValue> keys,
+        void multiGet(std::vector<std::string>&& keys,
                       std::function<void(JSValueArray const &errors, JSValueArray const &results)>
                           &&callback) noexcept
         {
