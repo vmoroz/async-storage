@@ -7,49 +7,36 @@
 
 namespace winrt::ReactNativeAsyncStorage::implementation
 {
-    REACT_MODULE(RNCAsyncStorage);
+    REACT_MODULE(RNCAsyncStorage)
     struct RNCAsyncStorage {
         REACT_METHOD(multiGet)
         void multiGet(std::vector<std::string> &&keys,
-                      DBStorage::ResultCallback &&callback) noexcept
-        {
-            m_dbStorage.AddTask<DBStorage::MultiGetTask>(std::move(keys), std::move(callback));
-        }
+                      std::function<void(const std::vector<DBStorage::Error> &errors,
+                                         const std::vector<DBStorage::KeyValue> &results)>
+                          &&callback) noexcept;
 
         REACT_METHOD(multiSet)
-        void multiSet(std::vector<DBStorage::KeyValue> &&keyValues,
-                      DBStorage::Callback &&callback) noexcept
-        {
-            m_dbStorage.AddTask<DBStorage::MultiSetTask>(std::move(keyValues), std::move(callback));
-        }
+        void multiSet(
+            std::vector<DBStorage::KeyValue> &&keyValues,
+            std::function<void(const std::vector<DBStorage::Error> &errors)> &&callback) noexcept;
 
         REACT_METHOD(multiMerge)
-        void multiMerge(std::vector<DBStorage::KeyValue> &&keyValues,
-                        DBStorage::Callback &&callback) noexcept
-        {
-            m_dbStorage.AddTask<DBStorage::MultiMergeTask>(std::move(keyValues),
-                                                           std::move(callback));
-        }
+        void multiMerge(
+            std::vector<DBStorage::KeyValue> &&keyValues,
+            std::function<void(const std::vector<DBStorage::Error> &errors)> &&callback) noexcept;
 
         REACT_METHOD(multiRemove)
-        void multiRemove(std::vector<std::string> &&keys, DBStorage::Callback &&callback) noexcept
-        {
-            m_dbStorage.AddTask<DBStorage::MultiRemoveTask>(std::move(keys), std::move(callback));
-        }
+        void multiRemove(
+            std::vector<std::string> &&keys,
+            std::function<void(const std::vector<DBStorage::Error> &errors)> &&callback) noexcept;
 
         REACT_METHOD(getAllKeys)
         void getAllKeys(
             std::function<void(const DBStorage::Error &error, const std::vector<std::string> &keys)>
-                &&callback) noexcept
-        {
-            m_dbStorage.AddTask<DBStorage::GetAllKeysTask>(std::move(callback));
-        }
+                &&callback) noexcept;
 
         REACT_METHOD(clear)
-        void clear(std::function<void(const DBStorage::Error &error)> &&callback) noexcept
-        {
-            m_dbStorage.AddTask<DBStorage::ClearTask>(std::move(callback));
-        }
+        void clear(std::function<void(const DBStorage::Error &error)> &&callback) noexcept;
 
     private:
         DBStorage m_dbStorage;
