@@ -9,9 +9,6 @@
 class DBStorage
 {
 public:
-    typedef std::function<void(std::vector<winrt::Microsoft::ReactNative::JSValue> const &)>
-        Callback;
-
     struct Error {
         std::string Message;
     };
@@ -23,6 +20,8 @@ public:
 
     using ResultCallback =
         std::function<void(const std::vector<Error> &errors, const std::vector<KeyValue> &results)>;
+
+    using Callback = std::function<void(const std::vector<Error> &errors)>;
 
     struct DBTask {
         DBTask() = default;
@@ -69,6 +68,19 @@ public:
         Callback m_callback;
     };
 
+    struct MultiMergeTask : DBTask {
+        MultiMergeTask(std::vector<KeyValue> &&args, Callback &&callback)
+            : m_args{std::move(args)}, m_callback{std::move(callback)}
+        {
+        }
+
+        void Run(sqlite3 *db) override;
+
+    private:
+        std::vector<KeyValue> m_args;
+        Callback m_callback;
+    };
+
     struct MultiRemoveTask : DBTask {
         MultiRemoveTask(std::vector<std::string> &&args, Callback &&callback)
             : m_args{std::move(args)}, m_callback{std::move(callback)}
@@ -83,25 +95,29 @@ public:
     };
 
     struct ClearTask : DBTask {
-        ClearTask(Callback &&callback) : m_callback{std::move(callback)}
+        ClearTask(std::function<void(const DBStorage::Error &error)> &&callback)
+            : m_callback{std::move(callback)}
         {
         }
 
         void Run(sqlite3 *db) override;
 
     private:
-        Callback m_callback;
+        std::function<void(const DBStorage::Error &error)> &&m_callback;
     };
 
     struct GetAllKeysTask : DBTask {
-        GetAllKeysTask(Callback &&callback) : m_callback{std::move(callback)}
+        GetAllKeysTask(std::function<void(const DBStorage::Error &error,
+                                          const std::vector<std::string> &keys)> &&callback)
+            : m_callback{std::move(callback)}
         {
         }
 
         void Run(sqlite3 *db) override;
 
     private:
-        Callback m_callback;
+        std::function<void(const DBStorage::Error &error, const std::vector<std::string> &keys)>
+            m_callback;
     };
 
     DBStorage();

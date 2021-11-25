@@ -415,6 +415,7 @@ void DBStorage::MultiGetTask::Run(sqlite3 *db)
         }
         result.push_back(winrt::JSValueArray({key, value}));
     }
+    // TODO:
     // auto writer = winrt::MakeJSValueTreeWriter();
     // result.WriteTo(writer);
     // std::vector<winrt::JSValue> callbackParams;
@@ -450,9 +451,68 @@ void DBStorage::MultiSetTask::Run(sqlite3 *db)
     if (!transaction.Commit()) {
         return;
     }
-    std::vector<winrt::JSValue> callbackParams;
-    callbackParams.push_back(winrt::JSValueArray());
-    m_callback(callbackParams);
+    // TODO:
+    // std::vector<winrt::JSValue> callbackParams;
+    // callbackParams.push_back(winrt::JSValueArray());
+    // m_callback(callbackParams);
+}
+
+void DBStorage::MultiMergeTask::Run(sqlite3 * /*db*/)
+{
+    // std::vector<JSValue> keys;
+    // std::vector<std::string> newValues;
+    // for (const auto &pair : pairs) {
+    //    keys.push_back(pair.AsArray()[0].AsString());
+    //    newValues.push_back(pair.AsArray()[1].AsString());
+    //}
+
+    // multiGet(std::move(keys),
+    //         [newValues{std::move(newValues)}, callback{std::move(callback)}, this](
+    //             JSValueArray const &errors, JSValueArray const &results) {
+    //             if (errors.size() > 0) {
+    //                 callback(errors);
+    //                 return;
+    //             }
+
+    //             std::vector<JSValue> mergedResults;
+
+    //             for (int i = 0; i < results.size(); i++) {
+    //                 auto &oldPair = results[i].AsArray();
+    //                 auto &key = oldPair[0];
+    //                 auto oldValue = oldPair[1].AsString();
+    //                 auto &newValue = newValues[i];
+
+    //                 winrt::Windows::Data::Json::JsonObject oldJson;
+    //                 winrt::Windows::Data::Json::JsonObject newJson;
+    //                 if (winrt::Windows::Data::Json::JsonObject::TryParse(
+    //                         winrt::to_hstring(oldValue), oldJson) &&
+    //                     winrt::Windows::Data::Json::JsonObject::TryParse(
+    //                         winrt::to_hstring(newValue), newJson)) {
+    //                     MergeJsonObjects(oldJson, newJson);
+
+    //                     JSValue value;
+    //                     auto writer = MakeJSValueTreeWriter();
+    //                     writer.WriteArrayBegin();
+    //                     WriteValue(writer, key);
+    //                     WriteValue(writer, oldJson.ToString());
+    //                     writer.WriteArrayEnd();
+    //                     mergedResults.push_back(TakeJSValue(writer));
+    //                 } else {
+    //                     auto writer = MakeJSValueTreeWriter();
+    //                     writer.WriteObjectBegin();
+    //                     WriteProperty(
+    //                         writer, L"message", L"Values must be valid Json strings");
+    //                     writer.WriteObjectEnd();
+    //                     callback(JSValueArray{TakeJSValue(writer)});
+    //                     return;
+    //                 }
+    //             }
+
+    //             multiSet(std::move(mergedResults),
+    //                      [callback{std::move(callback)}](JSValueArray const &errors) {
+    //                          callback(errors);
+    //                      });
+    //         });
 }
 
 void DBStorage::MultiRemoveTask::Run(sqlite3 *db)
@@ -480,9 +540,10 @@ void DBStorage::MultiRemoveTask::Run(sqlite3 *db)
             return;
         }
     }
-    std::vector<winrt::JSValue> callbackParams;
-    callbackParams.push_back(winrt::JSValueArray());
-    m_callback(callbackParams);
+    // TODO:
+    // std::vector<winrt::JSValue> callbackParams;
+    // callbackParams.push_back(winrt::JSValueArray());
+    // m_callback(callbackParams);
 }
 
 void DBStorage::GetAllKeysTask::Run(sqlite3 *db)
@@ -498,19 +559,39 @@ void DBStorage::GetAllKeysTask::Run(sqlite3 *db)
     if (Exec(db, *this, u8"SELECT key FROM AsyncLocalStorage", getAllKeysCallback)) {
         auto writer = winrt::MakeJSValueTreeWriter();
         result.WriteTo(writer);
-        std::vector<winrt::JSValue> callbackParams;
-        callbackParams.push_back(nullptr);
-        callbackParams.push_back(winrt::TakeJSValue(writer));
-        m_callback(callbackParams);
+        // TODO:
+        // std::vector<winrt::JSValue> callbackParams;
+        // callbackParams.push_back(nullptr);
+        // callbackParams.push_back(winrt::TakeJSValue(writer));
+        // m_callback(callbackParams);
     }
 }
 
 void DBStorage::ClearTask::Run(sqlite3 *db)
 {
     if (Exec(db, *this, u8"DELETE FROM AsyncLocalStorage")) {
-        std::vector<winrt::JSValue> callbackParams;
-        callbackParams.push_back(nullptr);
-        m_callback(callbackParams);
+        // TODO:
+        // std::vector<winrt::JSValue> callbackParams;
+        // callbackParams.push_back(nullptr);
+        // m_callback(callbackParams);
+    }
+}
+
+// Merge newJson into oldJson
+void MergeJsonObjects(winrt::Windows::Data::Json::JsonObject const &oldJson,
+                      winrt::Windows::Data::Json::JsonObject const &newJson)
+{
+    for (auto pair : newJson) {
+        auto key = pair.Key();
+        auto newValue = pair.Value();
+        if (newValue.ValueType() == winrt::Windows::Data::Json::JsonValueType::Object &&
+            oldJson.HasKey(key)) {
+            auto oldValue = oldJson.GetNamedObject(key);
+            MergeJsonObjects(oldValue, newValue.GetObject());
+            oldJson.SetNamedValue(key, oldValue);
+        } else {
+            oldJson.SetNamedValue(key, newValue);
+        }
     }
 }
 
