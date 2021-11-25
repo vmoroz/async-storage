@@ -12,11 +12,7 @@ public:
         Callback;
 
     struct DBTask {
-        DBTask(std::vector<winrt::Microsoft::ReactNative::JSValue> &&args, Callback &&callback)
-            : m_args{std::move(args)}, m_callback{std::move(callback)}
-        {
-        }
-
+        DBTask() = default;
         DBTask(const DBTask &) = delete;
         DBTask(DBTask &&) = default;
         DBTask &operator=(const DBTask &) = delete;
@@ -27,35 +23,76 @@ public:
         }
 
         virtual void Run(sqlite3 *db) = 0;
+    };
 
-    protected:
+    struct MultiGetTask : DBTask {
+        MultiGetTask(std::vector<winrt::Microsoft::ReactNative::JSValue> &&args,
+                     Callback &&callback)
+            : m_args{std::move(args)}, m_callback{std::move(callback)}
+        {
+        }
+
+        void Run(sqlite3 *db) override;
+
+    private:
         std::vector<winrt::Microsoft::ReactNative::JSValue> m_args;
         Callback m_callback;
     };
 
-    struct MultiGetTask : DBTask {
-        using DBTask::DBTask;
-        void Run(sqlite3 *db) override;
-    };
-
     struct MultiSetTask : DBTask {
-        using DBTask::DBTask;
+        MultiSetTask(std::vector<winrt::Microsoft::ReactNative::JSValue> &&args,
+                     Callback &&callback)
+            : m_args{std::move(args)}, m_callback{std::move(callback)}
+        {
+        }
+
         void Run(sqlite3 *db) override;
+
+    private:
+        std::vector<winrt::Microsoft::ReactNative::JSValue> m_args;
+        Callback m_callback;
     };
 
     struct MultiRemoveTask : DBTask {
-        using DBTask::DBTask;
+        MultiRemoveTask(std::vector<winrt::Microsoft::ReactNative::JSValue> &&args,
+                     Callback &&callback)
+            : m_args{std::move(args)}, m_callback{std::move(callback)}
+        {
+        }
+
         void Run(sqlite3 *db) override;
+
+    private:
+        std::vector<winrt::Microsoft::ReactNative::JSValue> m_args;
+        Callback m_callback;
     };
 
     struct ClearTask : DBTask {
-        using DBTask::DBTask;
+        ClearTask(std::vector<winrt::Microsoft::ReactNative::JSValue> &&args,
+                     Callback &&callback)
+            : m_args{std::move(args)}, m_callback{std::move(callback)}
+        {
+        }
+
         void Run(sqlite3 *db) override;
+
+    private:
+        std::vector<winrt::Microsoft::ReactNative::JSValue> m_args;
+        Callback m_callback;
     };
 
     struct GetAllKeysTask : DBTask {
-        using DBTask::DBTask;
+        GetAllKeysTask(std::vector<winrt::Microsoft::ReactNative::JSValue> &&args,
+                     Callback &&callback)
+            : m_args{std::move(args)}, m_callback{std::move(callback)}
+        {
+        }
+
         void Run(sqlite3 *db) override;
+
+    private:
+        std::vector<winrt::Microsoft::ReactNative::JSValue> m_args;
+        Callback m_callback;
     };
 
     DBStorage();
