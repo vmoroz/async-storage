@@ -3,6 +3,7 @@
 #pragma once
 
 #include <winsqlite/winsqlite3.h>
+
 #include "NativeModules.h"
 
 class DBStorage
@@ -10,6 +11,10 @@ class DBStorage
 public:
     typedef std::function<void(std::vector<winrt::Microsoft::ReactNative::JSValue> const &)>
         Callback;
+
+    struct Error {
+        std::string Message;
+    };
 
     struct DBTask {
         DBTask() = default;
@@ -23,6 +28,11 @@ public:
         }
 
         virtual void Run(sqlite3 *db) = 0;
+
+        void AddError(std::string message) noexcept;
+
+    private:
+        std::vector<Error> m_errors;
     };
 
     struct MultiGetTask : DBTask {
@@ -55,7 +65,7 @@ public:
 
     struct MultiRemoveTask : DBTask {
         MultiRemoveTask(std::vector<winrt::Microsoft::ReactNative::JSValue> &&args,
-                     Callback &&callback)
+                        Callback &&callback)
             : m_args{std::move(args)}, m_callback{std::move(callback)}
         {
         }
@@ -68,8 +78,7 @@ public:
     };
 
     struct ClearTask : DBTask {
-        ClearTask(std::vector<winrt::Microsoft::ReactNative::JSValue> &&args,
-                     Callback &&callback)
+        ClearTask(std::vector<winrt::Microsoft::ReactNative::JSValue> &&args, Callback &&callback)
             : m_args{std::move(args)}, m_callback{std::move(callback)}
         {
         }
@@ -83,7 +92,7 @@ public:
 
     struct GetAllKeysTask : DBTask {
         GetAllKeysTask(std::vector<winrt::Microsoft::ReactNative::JSValue> &&args,
-                     Callback &&callback)
+                       Callback &&callback)
             : m_args{std::move(args)}, m_callback{std::move(callback)}
         {
         }
