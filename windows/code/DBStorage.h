@@ -18,6 +18,78 @@ public:
         std::string Value;
     };
 
+    struct PromiseBase {
+        PromiseBase(std::function<void(const std::vector<Error> &errors)> &&onFailure) noexcept
+            : m_onFailure(std::move(onFailure))
+        {
+        }
+        
+        void AddError(std::string&& message) noexcept
+        {
+            m_errors.push_back(Error{std::move(message)});
+        }
+
+        ~PromiseBase()
+        {
+            RunOnce([&] {
+                if (m_errors.empty()) {
+                    AddError("Task canceled");
+                }
+                m_onFailure(m_errors);
+            });
+        }
+
+        template <typename Fn>
+        void RunOnce(Fn &&fn)
+        {
+            if (m_isCompleted.test_and_set() == false) {
+                fn();
+            }
+        }
+
+    private:
+        std::atomic_flag m_isCompleted{false};
+        std::function<void(const std::vector<Error> &errors)> m_onFailure;
+        std::vector<Error> m_errors;
+    };
+
+    template <typename TValue>
+    struct Promise : PromiseBase {
+        Promise(std::function<void(const std::vector<Error> &errors, const TValue &value)>
+                    &&callback) noexcept
+            : PromiseBase([&](const std::vector<Error> &errors) { m_callback(errors, {}); }),
+              m_callback(std::move(callback))
+        {
+        }
+        
+        void Resolve(TValue &&value) noexcept
+        {
+            RunOnce([&] {
+                m_callback({}, value);
+            });
+        }
+
+    private:
+        std::function<void(const std::vector<Error> &errors, const TValue &value)> m_callback;
+    };
+
+    template <>
+    struct Promise<void> : PromiseBase {
+        Promise(std::function<void(const std::vector<Error> &errors)> &&callback) noexcept
+            : PromiseBase([&](const std::vector<Error> &errors) { m_callback(errors); }),
+              m_callback(std::move(callback))
+        {
+        }
+
+        void Resolve() noexcept
+        {
+            RunOnce([&] { m_callback({}); });
+        }
+
+        private:
+        std::function<void(const std::vector<Error> &errors)> m_callback;
+    };
+
     using ResultCallback =
         std::function<void(const std::vector<Error> &errors, const std::vector<KeyValue> &results)>;
 
