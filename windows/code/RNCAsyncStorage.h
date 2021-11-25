@@ -32,11 +32,11 @@ namespace winrt::ReactNativeAsyncStorage::implementation
         }
 
         REACT_METHOD(multiSet);
-        void multiSet(std::vector<JSValue> pairs,
+        void multiSet(std::vector<DBStorage::KeyValue>&& keyValues,
                       std::function<void(JSValueArray const &)> &&callback) noexcept
         {
             dbStorage.AddTask<DBStorage::MultiSetTask>(
-                std::move(pairs),
+                std::move(keyValues),
                 [callback{std::move(callback)}](std::vector<JSValue> const &callbackParams) {
                     if (callbackParams.size() > 0) {
                         auto &errors = callbackParams[0].AsArray();

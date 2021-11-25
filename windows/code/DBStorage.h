@@ -16,6 +16,11 @@ public:
         std::string Message;
     };
 
+    struct KeyValue {
+        std::string Key;
+        std::string Value;
+    };
+
     struct DBTask {
         DBTask() = default;
         DBTask(const DBTask &) = delete;
@@ -50,8 +55,7 @@ public:
     };
 
     struct MultiSetTask : DBTask {
-        MultiSetTask(std::vector<winrt::Microsoft::ReactNative::JSValue> &&args,
-                     Callback &&callback)
+        MultiSetTask(std::vector<KeyValue> &&args, Callback &&callback)
             : m_args{std::move(args)}, m_callback{std::move(callback)}
         {
         }
@@ -59,7 +63,7 @@ public:
         void Run(sqlite3 *db) override;
 
     private:
-        std::vector<winrt::Microsoft::ReactNative::JSValue> m_args;
+        std::vector<KeyValue> m_args;
         Callback m_callback;
     };
 
@@ -78,45 +82,34 @@ public:
     };
 
     struct ClearTask : DBTask {
-        ClearTask(std::vector<winrt::Microsoft::ReactNative::JSValue> &&args, Callback &&callback)
-            : m_args{std::move(args)}, m_callback{std::move(callback)}
+        ClearTask(Callback &&callback) : m_callback{std::move(callback)}
         {
         }
 
         void Run(sqlite3 *db) override;
 
     private:
-        std::vector<winrt::Microsoft::ReactNative::JSValue> m_args;
         Callback m_callback;
     };
 
     struct GetAllKeysTask : DBTask {
-        GetAllKeysTask(std::vector<winrt::Microsoft::ReactNative::JSValue> &&args,
-                       Callback &&callback)
-            : m_args{std::move(args)}, m_callback{std::move(callback)}
+        GetAllKeysTask(Callback &&callback) : m_callback{std::move(callback)}
         {
         }
 
         void Run(sqlite3 *db) override;
 
     private:
-        std::vector<winrt::Microsoft::ReactNative::JSValue> m_args;
         Callback m_callback;
     };
 
     DBStorage();
     ~DBStorage();
 
-    template <typename Task>
-    void AddTask(std::vector<winrt::Microsoft::ReactNative::JSValue> &&args, Callback &&jsCallback)
+    template <typename Task, typename... TArgs>
+    void AddTask(TArgs &&...args)
     {
-        AddTask(std::make_unique<Task>(std::move(args), std::move(jsCallback)));
-    }
-
-    template <typename Task>
-    void AddTask(Callback &&jsCallback)
-    {
-        AddTask<Task>({}, std::move(jsCallback));
+        AddTask(std::make_unique<Task>(std::forward<TArgs>(args)...));
     }
 
     void AddTask(std::unique_ptr<DBTask> task);
@@ -134,3 +127,6 @@ private:
 
     std::string ConvertWstrToStr(const std::wstring &wstr);
 };
+
+void ReadValue(const winrt::Microsoft::ReactNative::IJSValueReader &reader,
+               /*out*/ DBStorage::KeyValue &value) noexcept;

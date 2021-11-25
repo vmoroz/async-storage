@@ -416,9 +416,9 @@ void DBStorage::MultiSetTask::Run(sqlite3 *db)
     if (!pStmt) {
         return;
     }
-    for (auto &&arg : m_args) {
-        if (!BindString(db, *this, pStmt, 1, arg[0].AsString()) ||
-            !BindString(db, *this, pStmt, 2, arg[1].AsString())) {
+    for (const auto &arg : m_args) {
+        if (!BindString(db, *this, pStmt, 1, arg.Key) ||
+            !BindString(db, *this, pStmt, 2, arg.Value)) {
             return;
         }
         auto rc = sqlite3_step(pStmt.get());
@@ -493,5 +493,23 @@ void DBStorage::ClearTask::Run(sqlite3 *db)
         std::vector<winrt::JSValue> callbackParams;
         callbackParams.push_back(nullptr);
         m_callback(callbackParams);
+    }
+}
+
+void ReadValue(const winrt::IJSValueReader &reader,
+               /*out*/ DBStorage::KeyValue &value) noexcept
+{
+    if (reader.ValueType() == winrt::JSValueType::Array) {
+        int index = 0;
+        while (reader.GetNextArrayItem()) {
+            if (index == 0) {
+                ReadValue(reader, value.Key);
+            } else if (index == 1) {
+                ReadValue(reader, value.Value);
+            } else {
+                winrt::SkipValue<winrt::JSValue>(reader);
+            }
+            ++index;
+        }
     }
 }
