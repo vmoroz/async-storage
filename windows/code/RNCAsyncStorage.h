@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 #pragma once
 
+#include <optional>
+
 #include "DBStorage.h"
 #include "NativeModules.h"
 
@@ -31,12 +33,13 @@ namespace winrt::ReactNativeAsyncStorage::implementation
             std::function<void(const std::vector<DBStorage::Error> &errors)> &&callback) noexcept;
 
         REACT_METHOD(getAllKeys)
-        void getAllKeys(
-            std::function<void(const DBStorage::Error &error, const std::vector<std::string> &keys)>
-                &&callback) noexcept;
+        void
+        getAllKeys(std::function<void(const std::optional<DBStorage::Error> &error,
+                                      const std::vector<std::string> &keys)> &&callback) noexcept;
 
         REACT_METHOD(clear)
-        void clear(std::function<void(const DBStorage::Error &error)> &&callback) noexcept;
+        void clear(
+            std::function<void(const std::optional<DBStorage::Error> &error)> &&callback) noexcept;
 
     private:
         DBStorage m_dbStorage;

@@ -11,7 +11,8 @@ namespace winrt::ReactNativeAsyncStorage::implementation
         std::function<void(const std::vector<DBStorage::Error> &errors,
                            const std::vector<DBStorage::KeyValue> &results)> &&callback) noexcept
     {
-        auto promise = std::make_shared<DBStorage::Promise<std::vector<DBStorage::KeyValue>>>(
+        auto promise = std::make_shared<
+            DBStorage::Promise<std::vector<DBStorage::KeyValue>, std::vector<DBStorage::Error>>>(
             std::move(callback));
         m_dbStorage.AddTask<DBStorage::MultiGetTask>(std::move(keys), std::move(callback));
     }
@@ -20,7 +21,8 @@ namespace winrt::ReactNativeAsyncStorage::implementation
         std::vector<DBStorage::KeyValue> &&keyValues,
         std::function<void(const std::vector<DBStorage::Error> &errors)> &&callback) noexcept
     {
-        auto promise = std::make_shared<DBStorage::Promise<void>>(std::move(callback));
+        auto promise = std::make_shared<DBStorage::Promise<void, std::vector<DBStorage::Error>>>(
+            std::move(callback));
         m_dbStorage.AddTask<DBStorage::MultiSetTask>(std::move(keyValues), std::move(callback));
     }
 
@@ -28,7 +30,8 @@ namespace winrt::ReactNativeAsyncStorage::implementation
         std::vector<DBStorage::KeyValue> &&keyValues,
         std::function<void(const std::vector<DBStorage::Error> &errors)> &&callback) noexcept
     {
-        auto promise = std::make_shared<DBStorage::Promise<void>>(std::move(callback));
+        auto promise = std::make_shared<DBStorage::Promise<void, std::vector<DBStorage::Error>>>(
+            std::move(callback));
         m_dbStorage.AddTask<DBStorage::MultiMergeTask>(std::move(keyValues), std::move(callback));
     }
 
@@ -36,37 +39,26 @@ namespace winrt::ReactNativeAsyncStorage::implementation
         std::vector<std::string> &&keys,
         std::function<void(const std::vector<DBStorage::Error> &errors)> &&callback) noexcept
     {
-        auto promise = std::make_shared<DBStorage::Promise<void>>(std::move(callback));
+        auto promise = std::make_shared<DBStorage::Promise<void, std::vector<DBStorage::Error>>>(
+            std::move(callback));
         m_dbStorage.AddTask<DBStorage::MultiRemoveTask>(std::move(keys), std::move(callback));
     }
 
     void RNCAsyncStorage::getAllKeys(
-        std::function<void(const DBStorage::Error &error, const std::vector<std::string> &keys)>
-            &&callback) noexcept
+        std::function<void(const std::optional<DBStorage::Error> &error,
+                           const std::vector<std::string> &keys)> &&callback) noexcept
     {
-        auto promise = std::make_shared<DBStorage::Promise<std::vector<std::string>>>(
-            [callback = std::move(callback)](const std::vector<DBStorage::Error> &errors,
-                                             const std::vector<std::string> &results) {
-                if (errors.empty()) {
-                    callback({}, results);
-                } else {
-                    callback(errors[0], {});
-                }
-            });
+        auto promise = std::make_shared<
+            DBStorage::Promise<std::vector<std::string>, std::optional<DBStorage::Error>>>(
+            std::move(callback));
         m_dbStorage.AddTask<DBStorage::GetAllKeysTask>(std::move(callback));
     }
 
-    void
-    RNCAsyncStorage::clear(std::function<void(const DBStorage::Error &error)> &&callback) noexcept
+    void RNCAsyncStorage::clear(
+        std::function<void(const std::optional<DBStorage::Error> &error)> &&callback) noexcept
     {
-        auto promise = std::make_shared<DBStorage::Promise<void>>(
-            [callback = std::move(callback)](const std::vector<DBStorage::Error> &errors) {
-                if (errors.empty()) {
-                    callback({});
-                } else {
-                    callback(errors[0]);
-                }
-            });
+        auto promise = std::make_shared<DBStorage::Promise<void, std::optional<DBStorage::Error>>>(
+            std::move(callback));
         m_dbStorage.AddTask<DBStorage::ClearTask>(std::move(callback));
     }
 
