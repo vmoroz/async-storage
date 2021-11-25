@@ -415,12 +415,12 @@ void DBStorage::MultiGetTask::Run(sqlite3 *db)
         }
         result.push_back(winrt::JSValueArray({key, value}));
     }
-    auto writer = winrt::MakeJSValueTreeWriter();
-    result.WriteTo(writer);
-    std::vector<winrt::JSValue> callbackParams;
-    callbackParams.push_back(winrt::JSValueArray());
-    callbackParams.push_back(winrt::TakeJSValue(writer));
-    m_callback(callbackParams);
+    // auto writer = winrt::MakeJSValueTreeWriter();
+    // result.WriteTo(writer);
+    // std::vector<winrt::JSValue> callbackParams;
+    // callbackParams.push_back(winrt::JSValueArray());
+    // callbackParams.push_back(winrt::TakeJSValue(writer));
+    // m_callback(callbackParams);
 }
 
 void DBStorage::MultiSetTask::Run(sqlite3 *db)
@@ -530,4 +530,20 @@ void ReadValue(const winrt::IJSValueReader &reader,
             ++index;
         }
     }
+}
+
+void WriteValue(const winrt::Microsoft::ReactNative::IJSValueWriter &writer,
+                const DBStorage::KeyValue &value) noexcept
+{
+    writer.WriteArrayBegin();
+    WriteValue(writer, value.Key);
+    WriteValue(writer, value.Value);
+    writer.WriteArrayEnd();
+}
+
+void WriteValue(const winrt::IJSValueWriter &writer, const DBStorage::Error &value) noexcept
+{
+    writer.WriteObjectBegin();
+    winrt::WriteProperty(writer, L"message", value.Message);
+    writer.WriteObjectEnd();
 }

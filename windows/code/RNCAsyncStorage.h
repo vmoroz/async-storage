@@ -16,21 +16,9 @@ namespace winrt::ReactNativeAsyncStorage::implementation
 
         REACT_METHOD(multiGet)
         void multiGet(std::vector<std::string> &&keys,
-                      std::function<void(JSValueArray const &errors, JSValueArray const &results)>
-                          &&callback) noexcept
+                      DBStorage::ResultCallback &&callback) noexcept
         {
-            dbStorage.AddTask<DBStorage::MultiGetTask>(
-                std::move(keys),
-                [callback{std::move(callback)}](std::vector<JSValue> const &callbackParams) {
-                    if (callbackParams.size() > 0) {
-                        auto &errors = callbackParams[0].AsArray();
-                        if (callbackParams.size() > 1) {
-                            callback(errors, callbackParams[1].AsArray());
-                        } else {
-                            callback(errors, {});
-                        }
-                    }
-                });
+            dbStorage.AddTask<DBStorage::MultiGetTask>(std::move(keys), std::move(callback));
         }
 
         REACT_METHOD(multiSet)

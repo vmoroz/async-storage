@@ -21,6 +21,9 @@ public:
         std::string Value;
     };
 
+    using ResultCallback =
+        std::function<void(const std::vector<Error> &errors, const std::vector<KeyValue> &results)>;
+
     struct DBTask {
         DBTask() = default;
         DBTask(const DBTask &) = delete;
@@ -41,7 +44,7 @@ public:
     };
 
     struct MultiGetTask : DBTask {
-        MultiGetTask(std::vector<std::string> &&args, Callback &&callback)
+        MultiGetTask(std::vector<std::string> &&args, ResultCallback &&callback) noexcept
             : m_args{std::move(args)}, m_callback{std::move(callback)}
         {
         }
@@ -50,7 +53,7 @@ public:
 
     private:
         std::vector<std::string> m_args;
-        Callback m_callback;
+        ResultCallback m_callback;
     };
 
     struct MultiSetTask : DBTask {
@@ -128,3 +131,9 @@ private:
 
 void ReadValue(const winrt::Microsoft::ReactNative::IJSValueReader &reader,
                /*out*/ DBStorage::KeyValue &value) noexcept;
+
+void WriteValue(const winrt::Microsoft::ReactNative::IJSValueWriter &writer,
+                const DBStorage::KeyValue &value) noexcept;
+
+void WriteValue(const winrt::Microsoft::ReactNative::IJSValueWriter &writer,
+                const DBStorage::Error &value) noexcept;
