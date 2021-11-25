@@ -24,8 +24,8 @@ public:
         return value.empty() ? std::optional<T>() : std::optional<T>(value[0]);
     }
 
-    struct PromiseBase {
-        PromiseBase(std::function<void(const std::vector<Error> &errors)> &&onFailure) noexcept
+    struct ErrorHandler {
+        ErrorHandler(std::function<void(const std::vector<Error> &errors)> &&onFailure) noexcept
             : m_onFailure(std::move(onFailure))
         {
         }
@@ -35,7 +35,7 @@ public:
             m_errors.push_back(Error{std::move(message)});
         }
 
-        ~PromiseBase()
+        ~ErrorHandler()
         {
             RunOnce([&] {
                 if (m_errors.empty()) {
@@ -60,10 +60,10 @@ public:
     };
 
     template <typename TValue, typename TError>
-    struct Promise : PromiseBase {
+    struct Promise : ErrorHandler {
         Promise(std::function<void(const std::vector<Error> &errors, const TValue &value)>
                     &&callback) noexcept
-            : PromiseBase([&](const std::vector<Error> &errors) { m_callback(errors, {}); }),
+            : ErrorHandler([&](const std::vector<Error> &errors) { m_callback(errors, {}); }),
               m_callback(std::move(callback))
         {
         }
@@ -78,10 +78,10 @@ public:
     };
 
     template <typename TValue>
-    struct Promise<TValue, std::optional<Error>> : PromiseBase {
+    struct Promise<TValue, std::optional<Error>> : ErrorHandler {
         Promise(std::function<void(const std::optional<Error> &errors, const TValue &value)>
                     &&callback) noexcept
-            : PromiseBase(
+            : ErrorHandler(
                   [&](const std::vector<Error> &errors) { m_callback(GetFirst(errors), {}); }),
               m_callback(std::move(callback))
         {
@@ -97,9 +97,9 @@ public:
     };
 
     template <>
-    struct Promise<void, std::vector<Error>> : PromiseBase {
+    struct Promise<void, std::vector<Error>> : ErrorHandler {
         Promise(std::function<void(const std::vector<Error> &errors)> &&callback) noexcept
-            : PromiseBase([&](const std::vector<Error> &errors) { m_callback(errors); }),
+            : ErrorHandler([&](const std::vector<Error> &errors) { m_callback(errors); }),
               m_callback(std::move(callback))
         {
         }
@@ -114,9 +114,9 @@ public:
     };
 
     template <>
-    struct Promise<void, std::optional<Error>> : PromiseBase {
+    struct Promise<void, std::optional<Error>> : ErrorHandler {
         Promise(std::function<void(const std::optional<Error> &error)> &&callback) noexcept
-            : PromiseBase([&](const std::vector<Error> &errors) { m_callback(GetFirst(errors)); }),
+            : ErrorHandler([&](const std::vector<Error> &errors) { m_callback(GetFirst(errors)); }),
               m_callback(std::move(callback))
         {
         }
