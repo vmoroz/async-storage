@@ -2,9 +2,6 @@
 // Licensed under the MIT License.
 #pragma once
 
-// TODO: remove
-#include "pch.h"
-
 #include "DBStorage.h"
 #include "NativeModules.h"
 
