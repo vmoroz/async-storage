@@ -18,35 +18,36 @@ public:
         std::string Value;
     };
 
-    template <typename T>
-    static std::optional<T> GetFirst(const std::vector<T> &value) noexcept
-    {
-        return value.empty() ? std::optional<T>() : std::optional<T>(value[0]);
-    }
+    template <typename TOnResolve, typename TOnReject>
+    struct Promise {
 
-    struct ErrorHandler {
-        ErrorHandler(std::function<void(const std::vector<Error> &errors)> &&onFailure) noexcept
-            : m_onFailure(std::move(onFailure))
+        Promise(TOnResolve &&onResolve, TOnReject &&onReject) noexcept
+            : m_onResolve(std::move(onResolve)), m_onReject(std::move(onReject))
         {
         }
 
-        void AddError(std::string &&message) noexcept
+        ~Promise()
         {
-            m_errors.push_back(Error{std::move(message)});
+            VerifyElseCrash(m_isCompleted.test_and_set());
         }
 
-        ~ErrorHandler()
+        Promise(const Promise &other) = delete;
+        Promise &operator=(const Promise &other) = delete;
+
+        template <typename TValue>
+        void Resolve(const TValue &value) noexcept
         {
-            RunOnce([&] {
-                if (m_errors.empty()) {
-                    AddError("Task canceled");
-                }
-                m_onFailure(m_errors);
-            });
+            Complete([&] { m_onResolve(value); });
         }
 
+        void Reject(const std::vector<Error> &errors) noexcept
+        {
+            Complete([&] { m_onReject(errors); });
+        }
+
+    private:
         template <typename Fn>
-        void RunOnce(Fn &&fn)
+        void Complete(Fn &&fn)
         {
             if (m_isCompleted.test_and_set() == false) {
                 fn();
@@ -55,195 +56,55 @@ public:
 
     private:
         std::atomic_flag m_isCompleted{false};
-        std::function<void(const std::vector<Error> &errors)> m_onFailure;
-        std::vector<Error> m_errors;
+        TOnResolve m_onResolve;
+        TOnReject m_onReject;
     };
-
-    template <typename TValue, typename TError>
-    struct Promise : ErrorHandler {
-        Promise(std::function<void(const std::vector<Error> &errors, const TValue &value)>
-                    &&callback) noexcept
-            : ErrorHandler([&](const std::vector<Error> &errors) { m_callback(errors, {}); }),
-              m_callback(std::move(callback))
-        {
-        }
-
-        void Resolve(TValue &&value) noexcept
-        {
-            RunOnce([&] { m_callback({}, value); });
-        }
-
-    private:
-        std::function<void(const std::vector<Error> &errors, const TValue &value)> m_callback;
-    };
-
-    template <typename TValue>
-    struct Promise<TValue, std::optional<Error>> : ErrorHandler {
-        Promise(std::function<void(const std::optional<Error> &errors, const TValue &value)>
-                    &&callback) noexcept
-            : ErrorHandler(
-                  [&](const std::vector<Error> &errors) { m_callback(GetFirst(errors), {}); }),
-              m_callback(std::move(callback))
-        {
-        }
-
-        void Resolve(TValue &&value) noexcept
-        {
-            RunOnce([&] { m_callback({}, value); });
-        }
-
-    private:
-        std::function<void(const std::optional<Error> &error, const TValue &value)> m_callback;
-    };
-
-    template <>
-    struct Promise<void, std::vector<Error>> : ErrorHandler {
-        Promise(std::function<void(const std::vector<Error> &errors)> &&callback) noexcept
-            : ErrorHandler([&](const std::vector<Error> &errors) { m_callback(errors); }),
-              m_callback(std::move(callback))
-        {
-        }
-
-        void Resolve() noexcept
-        {
-            RunOnce([&] { m_callback({}); });
-        }
-
-    private:
-        std::function<void(const std::vector<Error> &errors)> m_callback;
-    };
-
-    template <>
-    struct Promise<void, std::optional<Error>> : ErrorHandler {
-        Promise(std::function<void(const std::optional<Error> &error)> &&callback) noexcept
-            : ErrorHandler([&](const std::vector<Error> &errors) { m_callback(GetFirst(errors)); }),
-              m_callback(std::move(callback))
-        {
-        }
-
-        void Resolve() noexcept
-        {
-            RunOnce([&] { m_callback({}); });
-        }
-
-    private:
-        std::function<void(const std::optional<Error> &errors)> m_callback;
-    };
-
-    using ResultCallback =
-        std::function<void(const std::vector<Error> &errors, const std::vector<KeyValue> &results)>;
-
-    using Callback = std::function<void(const std::vector<Error> &errors)>;
 
     struct DBTask {
+        DBTask(std::function<void(DBTask &task, sqlite3 *db)> &&onInvoke,
+               std::function<void(DBTask &task)> &&m_onCancel) noexcept;
         DBTask() = default;
         DBTask(const DBTask &) = delete;
-        DBTask(DBTask &&) = default;
         DBTask &operator=(const DBTask &) = delete;
-        DBTask &operator=(DBTask &&) = default;
 
-        virtual ~DBTask()
-        {
-        }
+        ~DBTask();
 
-        virtual void Run(sqlite3 *db) = 0;
+        void Invoke(sqlite3 *db) noexcept;
+        void Cancel() noexcept;
 
         void AddError(std::string message) noexcept;
+        const std::vector<Error> &GetErrors() const noexcept;
+
+        std::optional<std::vector<KeyValue>>
+        MultiGet(sqlite3 *db, const std::vector<std::string> &keys) noexcept;
+        std::optional<bool> MultiSet(sqlite3 *db, const std::vector<KeyValue> &keyValues) noexcept;
+        std::optional<bool> MultiMerge(sqlite3 *db,
+                                       const std::vector<KeyValue> &keyValues) noexcept;
+        std::optional<bool> MultiRemove(sqlite3 *db, const std::vector<std::string> &keys) noexcept;
+        std::optional<std::vector<std::string>> GetAllKeys(sqlite3 *db) noexcept;
+        std::optional<bool> RemoveAll(sqlite3 *db) noexcept;
 
     private:
+        std::function<void(DBTask &task, sqlite3 *db)> m_onInvoke;
+        std::function<void(DBTask &task)> m_onCancel;
         std::vector<Error> m_errors;
-    };
-
-    struct MultiGetTask : DBTask {
-        MultiGetTask(std::vector<std::string> &&args, ResultCallback &&callback) noexcept
-            : m_args{std::move(args)}, m_callback{std::move(callback)}
-        {
-        }
-
-        void Run(sqlite3 *db) override;
-
-    private:
-        std::vector<std::string> m_args;
-        ResultCallback m_callback;
-    };
-
-    struct MultiSetTask : DBTask {
-        MultiSetTask(std::vector<KeyValue> &&args, Callback &&callback)
-            : m_args{std::move(args)}, m_callback{std::move(callback)}
-        {
-        }
-
-        void Run(sqlite3 *db) override;
-
-    private:
-        std::vector<KeyValue> m_args;
-        Callback m_callback;
-    };
-
-    struct MultiMergeTask : DBTask {
-        MultiMergeTask(std::vector<KeyValue> &&args, Callback &&callback)
-            : m_args{std::move(args)}, m_callback{std::move(callback)}
-        {
-        }
-
-        void Run(sqlite3 *db) override;
-
-    private:
-        std::vector<KeyValue> m_args;
-        Callback m_callback;
-    };
-
-    struct MultiRemoveTask : DBTask {
-        MultiRemoveTask(std::vector<std::string> &&args, Callback &&callback)
-            : m_args{std::move(args)}, m_callback{std::move(callback)}
-        {
-        }
-
-        void Run(sqlite3 *db) override;
-
-    private:
-        std::vector<std::string> m_args;
-        Callback m_callback;
-    };
-
-    struct ClearTask : DBTask {
-        ClearTask(std::function<void(const DBStorage::Error &error)> &&callback)
-            : m_callback{std::move(callback)}
-        {
-        }
-
-        void Run(sqlite3 *db) override;
-
-    private:
-        std::function<void(const DBStorage::Error &error)> &&m_callback;
-    };
-
-    struct GetAllKeysTask : DBTask {
-        GetAllKeysTask(std::function<void(const DBStorage::Error &error,
-                                          const std::vector<std::string> &keys)> &&callback)
-            : m_callback{std::move(callback)}
-        {
-        }
-
-        void Run(sqlite3 *db) override;
-
-    private:
-        std::function<void(const DBStorage::Error &error, const std::vector<std::string> &keys)>
-            m_callback;
     };
 
     DBStorage();
     ~DBStorage();
 
-    template <typename Task, typename... TArgs>
-    void AddTask(TArgs &&...args)
+    template <typename TOnResolve, typename TOnReject>
+    static auto CreatePromise(TOnResolve &&onResolve, TOnReject &&onReject) noexcept
     {
-        AddTask(std::make_unique<Task>(std::forward<TArgs>(args)...));
+        using PromiseType = Promise<std::decay_t<TOnResolve>, std::decay_t<TOnReject>>;
+        return std::make_shared<PromiseType>(std::forward<TOnResolve>(onResolve),
+                                             std::forward<TOnReject>(onReject));
     }
 
-    void AddTask(std::unique_ptr<DBTask> task);
+    void AddTask(std::function<void(DBStorage::DBTask &task, sqlite3 *db)> onInvoke,
+                 std::function<void(DBStorage::DBTask &task)> onCancel) noexcept;
 
-    winrt::Windows::Foundation::IAsyncAction RunTasks();
+    winrt::Windows::Foundation::IAsyncAction RunTasks() noexcept;
 
 private:
     static constexpr auto s_dbPathProperty = L"React-Native-Community-Async-Storage-Database-Path";
