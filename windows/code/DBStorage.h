@@ -61,15 +61,16 @@ public:
     };
 
     struct DBTask {
-        DBTask(std::function<void(DBTask &task, sqlite3 *db)> &&onInvoke,
-               std::function<void(DBTask &task)> &&m_onCancel) noexcept;
+        DBTask(std::function<void(DBTask &task, sqlite3 *db)> &&onRun,
+               std::function<void(DBTask &task)> &&onCancel) noexcept;
+
         DBTask() = default;
         DBTask(const DBTask &) = delete;
         DBTask &operator=(const DBTask &) = delete;
 
         ~DBTask();
 
-        void Invoke(sqlite3 *db) noexcept;
+        void Run(sqlite3 *db) noexcept;
         void Cancel() noexcept;
 
         void AddError(std::string message) noexcept;
@@ -85,7 +86,7 @@ public:
         std::optional<bool> RemoveAll(sqlite3 *db) noexcept;
 
     private:
-        std::function<void(DBTask &task, sqlite3 *db)> m_onInvoke;
+        std::function<void(DBTask &task, sqlite3 *db)> m_onRun;
         std::function<void(DBTask &task)> m_onCancel;
         std::vector<Error> m_errors;
     };
@@ -101,7 +102,7 @@ public:
                                              std::forward<TOnReject>(onReject));
     }
 
-    void AddTask(std::function<void(DBStorage::DBTask &task, sqlite3 *db)> onInvoke,
+    void AddTask(std::function<void(DBStorage::DBTask &task, sqlite3 *db)> onRun,
                  std::function<void(DBStorage::DBTask &task)> onCancel) noexcept;
 
     winrt::Windows::Foundation::IAsyncAction RunTasks() noexcept;

@@ -327,11 +327,11 @@ std::string DBStorage::ConvertWstrToStr(const std::wstring &wstr)
 
 // Under the lock, add a task to m_tasks and, if no async task is in progress,
 // schedule it
-void DBStorage::AddTask(std::function<void(DBStorage::DBTask &task, sqlite3 *db)> onInvoke,
+void DBStorage::AddTask(std::function<void(DBStorage::DBTask &task, sqlite3 *db)> onRun,
                         std::function<void(DBStorage::DBTask &task)> onCancel) noexcept
 {
     winrt::slim_lock_guard guard(m_lock);
-    m_tasks.push_back(std::make_unique<DBTask>(std::move(onInvoke), std::move(onCancel)));
+    m_tasks.push_back(std::make_unique<DBTask>(std::move(onRun), std::move(onCancel)));
     if (!m_action) {
         m_action = RunTasks();
     }
@@ -363,7 +363,7 @@ winrt::Windows::Foundation::IAsyncAction DBStorage::RunTasks() noexcept
         }
 
         for (auto &task : tasks) {
-            task->Invoke(db);
+            task->Run(db);
             if (cancellationToken())
                 break;
         }
@@ -371,6 +371,17 @@ winrt::Windows::Foundation::IAsyncAction DBStorage::RunTasks() noexcept
     winrt::slim_lock_guard guard(m_lock);
     m_action = nullptr;
     m_cv.notify_all();
+}
+
+DBStorage::DBTask::DBTask(std::function<void(DBTask &task, sqlite3 *db)> &&onRun,
+                          std::function<void(DBTask &task)> &&onCancel) noexcept
+    : m_onRun(std::move(onRun)), m_onCancel(std::move(onCancel))
+{
+}
+
+DBStorage::DBTask::~DBTask() noexcept
+{
+    Cancel();
 }
 
 void DBStorage::DBTask::AddError(std::string message) noexcept
@@ -381,6 +392,19 @@ void DBStorage::DBTask::AddError(std::string message) noexcept
 const std::vector<DBStorage::Error> &DBStorage::DBTask::GetErrors() const noexcept
 {
     return m_errors;
+}
+
+void DBStorage::DBTask::Run(sqlite3 *db) noexcept
+{
+    m_onRun(*this, db);
+}
+
+void DBStorage::DBTask::Cancel() noexcept
+{
+    if (m_errors.empty()) {
+        AddError("Task is canceled");
+    }
+    m_onCancel(*this);
 }
 
 std::optional<std::vector<DBStorage::KeyValue>>
