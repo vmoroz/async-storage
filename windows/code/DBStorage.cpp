@@ -76,9 +76,7 @@ namespace
     // Checks that the args parameter is an array, that args.size() is less than
     // SQLITE_LIMIT_VARIABLE_NUMBER, and that every member of args is a string.
     // Invokes callback to report an error and returns false.
-    bool CheckArgs(sqlite3 *db,
-                   const std::vector<winrt::JSValue> &args,
-                   DBStorage::DBTask &task)
+    bool CheckArgs(sqlite3 *db, const std::vector<winrt::JSValue> &args, DBStorage::DBTask &task)
     {
         int varLimit = sqlite3_limit(db, SQLITE_LIMIT_VARIABLE_NUMBER, -1);
         auto argCount = args.size();
@@ -97,7 +95,7 @@ namespace
         return true;
     }
 
-        // Checks that the args parameter is an array, that args.size() is less than
+    // Checks that the args parameter is an array, that args.size() is less than
     // SQLITE_LIMIT_VARIABLE_NUMBER, and that every member of args is a string.
     // Invokes callback to report an error and returns false.
     bool CheckArgs(sqlite3 *db, const std::vector<std::string> &args, DBStorage::DBTask &task)
@@ -130,8 +128,7 @@ namespace
 
     public:
         Sqlite3Transaction() = default;
-        Sqlite3Transaction(sqlite3 *db, DBStorage::DBTask &task)
-            : m_db(db), m_task(&task)
+        Sqlite3Transaction(sqlite3 *db, DBStorage::DBTask &task) : m_db(db), m_task(&task)
         {
             if (!Exec(m_db, *m_task, u8"BEGIN TRANSACTION")) {
                 m_db = nullptr;
@@ -139,8 +136,7 @@ namespace
             }
         }
         Sqlite3Transaction(const Sqlite3Transaction &) = delete;
-        Sqlite3Transaction(Sqlite3Transaction &&other)
-            : m_db(other.m_db), m_task(other.m_task)
+        Sqlite3Transaction(Sqlite3Transaction &&other) : m_db(other.m_db), m_task(other.m_task)
         {
             other.m_db = nullptr;
             other.m_task = nullptr;
@@ -473,7 +469,7 @@ void DBStorage::MultiRemoveTask::Run(sqlite3 *db)
         return;
     }
     for (int i = 0; i < argCount; i++) {
-        if (!BindString(db, *this, pStmt, i + 1, m_args[i].AsString())) {
+        if (!BindString(db, *this, pStmt, i + 1, m_args[i])) {
             return;
         }
     }

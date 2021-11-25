@@ -2,7 +2,9 @@
 // Licensed under the MIT License.
 #pragma once
 
+// TODO: remove
 #include "pch.h"
+
 #include "DBStorage.h"
 #include "NativeModules.h"
 
@@ -12,8 +14,8 @@ namespace winrt::ReactNativeAsyncStorage::implementation
     struct RNCAsyncStorage {
         DBStorage dbStorage;
 
-        REACT_METHOD(multiGet);
-        void multiGet(std::vector<std::string>&& keys,
+        REACT_METHOD(multiGet)
+        void multiGet(std::vector<std::string> &&keys,
                       std::function<void(JSValueArray const &errors, JSValueArray const &results)>
                           &&callback) noexcept
         {
@@ -31,8 +33,8 @@ namespace winrt::ReactNativeAsyncStorage::implementation
                 });
         }
 
-        REACT_METHOD(multiSet);
-        void multiSet(std::vector<DBStorage::KeyValue>&& keyValues,
+        REACT_METHOD(multiSet)
+        void multiSet(std::vector<DBStorage::KeyValue> &&keyValues,
                       std::function<void(JSValueArray const &)> &&callback) noexcept
         {
             dbStorage.AddTask<DBStorage::MultiSetTask>(
@@ -45,18 +47,18 @@ namespace winrt::ReactNativeAsyncStorage::implementation
                 });
         }
 
-        REACT_METHOD(multiMerge);
-        void multiMerge(std::vector<JSValue> /*pairs*/,
-                        std::function<void(JSValueArray const &)> &&/*callback*/) noexcept
+        REACT_METHOD(multiMerge)
+        void multiMerge(std::vector<DBStorage::KeyValue> && /*keyValues*/,
+                        std::function<void(JSValueArray const &)> && /*callback*/) noexcept
         {
-            //std::vector<JSValue> keys;
-            //std::vector<std::string> newValues;
-            //for (const auto &pair : pairs) {
+            // std::vector<JSValue> keys;
+            // std::vector<std::string> newValues;
+            // for (const auto &pair : pairs) {
             //    keys.push_back(pair.AsArray()[0].AsString());
             //    newValues.push_back(pair.AsArray()[1].AsString());
             //}
 
-            //multiGet(std::move(keys),
+            // multiGet(std::move(keys),
             //         [newValues{std::move(newValues)}, callback{std::move(callback)}, this](
             //             JSValueArray const &errors, JSValueArray const &results) {
             //             if (errors.size() > 0) {
@@ -105,8 +107,8 @@ namespace winrt::ReactNativeAsyncStorage::implementation
             //         });
         }
 
-        REACT_METHOD(multiRemove);
-        void multiRemove(std::vector<JSValue> keys,
+        REACT_METHOD(multiRemove)
+        void multiRemove(std::vector<std::string> keys,
                          std::function<void(JSValueArray const &)> &&callback) noexcept
         {
             dbStorage.AddTask<DBStorage::MultiRemoveTask>(
@@ -119,7 +121,7 @@ namespace winrt::ReactNativeAsyncStorage::implementation
                 });
         }
 
-        REACT_METHOD(getAllKeys);
+        REACT_METHOD(getAllKeys)
         void getAllKeys(
             std::function<void(JSValue const &error, JSValueArray const &keys)> &&callback) noexcept
         {
@@ -136,7 +138,7 @@ namespace winrt::ReactNativeAsyncStorage::implementation
                 });
         }
 
-        REACT_METHOD(clear);
+        REACT_METHOD(clear)
         void clear(std::function<void(JSValue const &)> &&callback) noexcept
         {
             dbStorage.AddTask<DBStorage::ClearTask>(

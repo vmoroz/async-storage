@@ -67,8 +67,7 @@ public:
     };
 
     struct MultiRemoveTask : DBTask {
-        MultiRemoveTask(std::vector<winrt::Microsoft::ReactNative::JSValue> &&args,
-                        Callback &&callback)
+        MultiRemoveTask(std::vector<std::string> &&args, Callback &&callback)
             : m_args{std::move(args)}, m_callback{std::move(callback)}
         {
         }
@@ -76,7 +75,7 @@ public:
         void Run(sqlite3 *db) override;
 
     private:
-        std::vector<winrt::Microsoft::ReactNative::JSValue> m_args;
+        std::vector<std::string> m_args;
         Callback m_callback;
     };
 
