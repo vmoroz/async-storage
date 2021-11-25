@@ -130,7 +130,6 @@
       <DependentUpon>..\code\ReactPackageProvider.idl</DependentUpon>
     </ClCompile>
     <ClCompile Include="..\code\DBStorage.cpp" />
-    <ClCompile Include="..\code\RNCAsyncStorage.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Midl Include="..\code\ReactPackageProvider.idl" />

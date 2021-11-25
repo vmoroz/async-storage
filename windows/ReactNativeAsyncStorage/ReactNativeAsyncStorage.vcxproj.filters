@@ -20,7 +20,6 @@
     <ClCompile Include="$(GeneratedFilesDir)module.g.cpp" />
     <ClCompile Include="..\code\ReactPackageProvider.cpp" />
     <ClCompile Include="..\code\DBStorage.cpp" />
-    <ClCompile Include="..\code\RNCAsyncStorage.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\code\ReactNativeAsyncStorage.def" />
