@@ -219,21 +219,6 @@ namespace
             db, task, sqlite3_bind_text(stmt.get(), index, str.c_str(), -1, SQLITE_TRANSIENT));
     }
 
-    struct slim_shared_lock_guard {
-        explicit slim_shared_lock_guard(winrt::slim_mutex &m) noexcept : m_mutex(m)
-        {
-            m_mutex.lock_shared();
-        }
-
-        ~slim_shared_lock_guard() noexcept
-        {
-            m_mutex.unlock_shared();
-        }
-
-    private:
-        winrt::slim_mutex &m_mutex;
-    };
-
     // Merge source into destination.
     // It only merges objects - all other types are just clobbered (including arrays).
     void MergeJsonObjects(winrt::Windows::Data::Json::JsonObject const &destination,
@@ -311,7 +296,7 @@ DBStorage::~DBStorage()
         // condition_variable for the async task to acknowledge cancellation by
         // nulling out m_action. Once m_action is null, it is safe to proceed
         // with closing the DB connection
-        slim_shared_lock_guard guard{m_lock};
+        winrt::slim_lock_guard guard{m_lock};
         swap(tasks, m_tasks);
         if (m_action) {
             m_action.Cancel();
@@ -371,9 +356,11 @@ winrt::Windows::Foundation::IAsyncAction DBStorage::RunTasks() noexcept
         }
 
         for (auto &task : tasks) {
-            task->Run(db);
-            if (cancellationToken())
-                break;
+            if (!cancellationToken()) {
+                task->Run(db);
+            } else {
+                task->Cancel();
+            }
         }
     }
     winrt::slim_lock_guard guard(m_lock);
