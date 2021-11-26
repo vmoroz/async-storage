@@ -369,7 +369,7 @@ const std::vector<DBStorage::Error> &DBStorage::DBTask::GetErrors() const noexce
     return m_errors;
 }
 
-void DBStorage::DBTask::Run(DBStorage& storage, sqlite3 *db) noexcept
+void DBStorage::DBTask::Run(DBStorage &storage, sqlite3 *db) noexcept
 {
     if (!db) {
         db = storage.InitializeStorage(*this);
@@ -480,17 +480,16 @@ std::optional<bool> DBStorage::DBTask::MultiMerge(sqlite3 *db,
         newValues.try_emplace(keyValue.Key, keyValue.Value);
     }
 
-    auto result = MultiGet(db, keys);
-    if (!result) {
+    auto oldValues = MultiGet(db, keys);
+    if (!oldValues) {
         return std::nullopt;
     }
 
     std::vector<KeyValue> mergedResults;
 
-    for (size_t i = 0; i < result->size(); i++) {
-        auto &key = result->at(i).Key;
-        auto &oldValue = result->at(i).Value;
-        // TODO: what if it is at different index?
+    for (size_t i = 0; i < oldValues->size(); i++) {
+        auto &key = oldValues->at(i).Key;
+        auto &oldValue = oldValues->at(i).Value;
         auto &newValue = newValues[key];
 
         winrt::Windows::Data::Json::JsonObject oldJson;
