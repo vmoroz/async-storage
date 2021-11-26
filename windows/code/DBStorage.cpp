@@ -55,28 +55,6 @@ namespace
     // Checks that the args parameter is an array, that args.size() is less than
     // SQLITE_LIMIT_VARIABLE_NUMBER, and that every member of args is a string.
     // Invokes callback to report an error and returns false.
-    bool CheckArgs(sqlite3 *db, const std::vector<winrt::JSValue> &args, DBStorage::DBTask &task)
-    {
-        int varLimit = sqlite3_limit(db, SQLITE_LIMIT_VARIABLE_NUMBER, -1);
-        auto argCount = args.size();
-        if (argCount > INT_MAX || static_cast<int>(argCount) > varLimit) {
-            char errorMsg[60];
-            sprintf_s(errorMsg, "Too many keys. Maximum supported keys :%d", varLimit);
-            task.AddError(errorMsg);
-            return false;
-        }
-        for (int i = 0; i < static_cast<int>(argCount); i++) {
-            if (!args[i].TryGetString()) {
-                task.AddError("Invalid key type. Expected a string");
-                return false;
-            }
-        }
-        return true;
-    }
-
-    // Checks that the args parameter is an array, that args.size() is less than
-    // SQLITE_LIMIT_VARIABLE_NUMBER, and that every member of args is a string.
-    // Invokes callback to report an error and returns false.
     bool CheckArgs(sqlite3 *db, const std::vector<std::string> &args, DBStorage::DBTask &task)
     {
         int varLimit = sqlite3_limit(db, SQLITE_LIMIT_VARIABLE_NUMBER, -1);
