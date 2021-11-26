@@ -116,6 +116,7 @@ private:
     winrt::Windows::Foundation::IAsyncAction m_action{nullptr};
     std::vector<std::unique_ptr<DBTask>> m_tasks;
 
+    // TODO: remove
     std::string ConvertWstrToStr(const std::wstring &wstr);
 };
 

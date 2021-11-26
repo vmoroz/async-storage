@@ -4,6 +4,8 @@
 
 #include "DBStorage.h"
 
+#include <unordered_map>
+
 namespace winrt
 {
     using namespace Microsoft::ReactNative;
@@ -246,6 +248,26 @@ namespace
         winrt::slim_mutex &m_mutex;
     };
 
+    // Merge source into destination.
+    // It only merges objects - all other types are just clobbered (including arrays).
+    void MergeJsonObjects(winrt::Windows::Data::Json::JsonObject const &destination,
+                          winrt::Windows::Data::Json::JsonObject const &source) noexcept
+    {
+        for (auto keyValue : source) {
+            auto key = keyValue.Key();
+            auto sourceValue = keyValue.Value();
+            if (destination.HasKey(key)) {
+                auto destinationValue = destination.GetNamedValue(key);
+                if (destinationValue.ValueType() ==
+                        winrt::Windows::Data::Json::JsonValueType::Object &&
+                    sourceValue.ValueType() == winrt::Windows::Data::Json::JsonValueType::Object) {
+                    MergeJsonObjects(destinationValue.GetObject(), sourceValue.GetObject());
+                    continue;
+                }
+            }
+            destination.SetNamedValue(key, sourceValue);
+        }
+    }
 }  // namespace
 
 DBStorage::DBStorage()
@@ -410,6 +432,11 @@ void DBStorage::DBTask::Cancel() noexcept
 std::optional<std::vector<DBStorage::KeyValue>>
 DBStorage::DBTask::MultiGet(sqlite3 *db, const std::vector<std::string> &keys) noexcept
 {
+    if (keys.empty()) {
+        // Nothing to do.
+        return std::vector<DBStorage::KeyValue>();
+    }
+
     if (!CheckArgs(db, keys, *this)) {
         return std::nullopt;
     }
@@ -453,6 +480,11 @@ DBStorage::DBTask::MultiGet(sqlite3 *db, const std::vector<std::string> &keys) n
 std::optional<bool> DBStorage::DBTask::MultiSet(sqlite3 *db,
                                                 const std::vector<KeyValue> &keyValues) noexcept
 {
+    if (keyValues.empty()) {
+        // Nothing to do.
+        return true;
+    }
+
     Sqlite3Transaction transaction(db, *this);
     if (!transaction) {
         return std::nullopt;
@@ -484,61 +516,43 @@ std::optional<bool> DBStorage::DBTask::MultiSet(sqlite3 *db,
 std::optional<bool> DBStorage::DBTask::MultiMerge(sqlite3 *db,
                                                   const std::vector<KeyValue> &keyValues) noexcept
 {
-    // std::vector<JSValue> keys;
-    // std::vector<std::string> newValues;
-    // for (const auto &pair : pairs) {
-    //    keys.push_back(pair.AsArray()[0].AsString());
-    //    newValues.push_back(pair.AsArray()[1].AsString());
-    //}
+    std::vector<std::string> keys;
+    std::unordered_map<std::string, std::string> newValues;
+    keys.reserve(keyValues.size());
+    for (const auto &keyValue : keyValues) {
+        keys.push_back(keyValue.Key);
+        newValues.try_emplace(keyValue.Key, keyValue.Value);
+    }
 
-    // multiGet(std::move(keys),
-    //         [newValues{std::move(newValues)}, callback{std::move(callback)}, this](
-    //             JSValueArray const &errors, JSValueArray const &results) {
-    //             if (errors.size() > 0) {
-    //                 callback(errors);
-    //                 return;
-    //             }
+    auto result = MultiGet(db, keys);
+    if (!result) {
+        return std::nullopt;
+    }
 
-    //             std::vector<JSValue> mergedResults;
+    std::vector<KeyValue> mergedResults;
 
-    //             for (int i = 0; i < results.size(); i++) {
-    //                 auto &oldPair = results[i].AsArray();
-    //                 auto &key = oldPair[0];
-    //                 auto oldValue = oldPair[1].AsString();
-    //                 auto &newValue = newValues[i];
+    for (size_t i = 0; i < result->size(); i++) {
+        auto &key = result->at(i).Key;
+        auto &oldValue = result->at(i).Value;
+        // TODO: what if it is at different index?
+        auto &newValue = newValues[key];
 
-    //                 winrt::Windows::Data::Json::JsonObject oldJson;
-    //                 winrt::Windows::Data::Json::JsonObject newJson;
-    //                 if (winrt::Windows::Data::Json::JsonObject::TryParse(
-    //                         winrt::to_hstring(oldValue), oldJson) &&
-    //                     winrt::Windows::Data::Json::JsonObject::TryParse(
-    //                         winrt::to_hstring(newValue), newJson)) {
-    //                     MergeJsonObjects(oldJson, newJson);
+        winrt::Windows::Data::Json::JsonObject oldJson;
+        winrt::Windows::Data::Json::JsonObject newJson;
+        if (winrt::Windows::Data::Json::JsonObject::TryParse(winrt::to_hstring(oldValue),
+                                                             oldJson) &&
+            winrt::Windows::Data::Json::JsonObject::TryParse(winrt::to_hstring(newValue),
+                                                             newJson)) {
+            MergeJsonObjects(oldJson, newJson);
 
-    //                     JSValue value;
-    //                     auto writer = MakeJSValueTreeWriter();
-    //                     writer.WriteArrayBegin();
-    //                     WriteValue(writer, key);
-    //                     WriteValue(writer, oldJson.ToString());
-    //                     writer.WriteArrayEnd();
-    //                     mergedResults.push_back(TakeJSValue(writer));
-    //                 } else {
-    //                     auto writer = MakeJSValueTreeWriter();
-    //                     writer.WriteObjectBegin();
-    //                     WriteProperty(
-    //                         writer, L"message", L"Values must be valid Json strings");
-    //                     writer.WriteObjectEnd();
-    //                     callback(JSValueArray{TakeJSValue(writer)});
-    //                     return;
-    //                 }
-    //             }
+            mergedResults.push_back(KeyValue{key, winrt::to_string(oldJson.ToString())});
+        } else {
+            AddError("Values must be valid JSON object strings");
+            return std::nullopt;
+        }
+    }
 
-    //             multiSet(std::move(mergedResults),
-    //                      [callback{std::move(callback)}](JSValueArray const &errors) {
-    //                          callback(errors);
-    //                      });
-    //         });
-    return std::nullopt;
+    return MultiSet(db, std::move(mergedResults));
 }
 
 std::optional<bool> DBStorage::DBTask::MultiRemove(sqlite3 *db,
@@ -593,24 +607,6 @@ std::optional<bool> DBStorage::DBTask::RemoveAll(sqlite3 *db) noexcept
         return true;
     }
     return std::nullopt;
-}
-
-// Merge newJson into oldJson
-void MergeJsonObjects(winrt::Windows::Data::Json::JsonObject const &oldJson,
-                      winrt::Windows::Data::Json::JsonObject const &newJson)
-{
-    for (auto pair : newJson) {
-        auto key = pair.Key();
-        auto newValue = pair.Value();
-        if (newValue.ValueType() == winrt::Windows::Data::Json::JsonValueType::Object &&
-            oldJson.HasKey(key)) {
-            auto oldValue = oldJson.GetNamedObject(key);
-            MergeJsonObjects(oldValue, newValue.GetObject());
-            oldJson.SetNamedValue(key, oldValue);
-        } else {
-            oldJson.SetNamedValue(key, newValue);
-        }
-    }
 }
 
 void ReadValue(const winrt::IJSValueReader &reader,
