@@ -123,13 +123,7 @@ namespace
     // Commit() has not been called, rolls back the transactions
     // The provided SQLite connection handle & Callback must outlive
     // the Sqlite3Transaction object
-    class Sqlite3Transaction
-    {
-        sqlite3 *m_db{nullptr};
-        DBStorage::DBTask *m_task{nullptr};
-
-    public:
-        Sqlite3Transaction() = default;
+    struct Sqlite3Transaction {
         Sqlite3Transaction(sqlite3 *db, DBStorage::DBTask &task) : m_db(db), m_task(&task)
         {
             if (!Exec(m_db, *m_task, u8"BEGIN TRANSACTION")) {
@@ -137,34 +131,18 @@ namespace
                 m_task = nullptr;
             }
         }
+
         Sqlite3Transaction(const Sqlite3Transaction &) = delete;
-        Sqlite3Transaction(Sqlite3Transaction &&other) : m_db(other.m_db), m_task(other.m_task)
-        {
-            other.m_db = nullptr;
-            other.m_task = nullptr;
-        }
         Sqlite3Transaction &operator=(const Sqlite3Transaction &) = delete;
-        Sqlite3Transaction &operator=(Sqlite3Transaction &&rhs)
+
+        ~Sqlite3Transaction()
         {
-            if (this != &rhs) {
-                Commit();
-                std::swap(m_db, rhs.m_db);
-                std::swap(m_task, rhs.m_task);
-            }
+            Rollback();
         }
 
         explicit operator bool() const
         {
             return m_db != nullptr;
-        }
-
-        void Rollback()
-        {
-            if (m_db) {
-                Exec(m_db, *m_task, u8"ROLLBACK");
-                m_db = nullptr;
-                m_task = nullptr;
-            }
         }
 
         bool Commit()
@@ -178,10 +156,18 @@ namespace
             return result;
         }
 
-        ~Sqlite3Transaction()
+        void Rollback()
         {
-            Rollback();
+            if (m_db) {
+                Exec(m_db, *m_task, u8"ROLLBACK");
+                m_db = nullptr;
+                m_task = nullptr;
+            }
         }
+
+    private:
+        sqlite3 *m_db{nullptr};
+        DBStorage::DBTask *m_task{nullptr};
     };
 
     // Appends argCount variables to prefix in a comma-separated list.
