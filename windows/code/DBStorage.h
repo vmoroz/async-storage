@@ -73,7 +73,7 @@ public:
         void Run(DBStorage &storage, sqlite3 *db) noexcept;
         void Cancel() noexcept;
 
-        void AddError(std::string message) noexcept;
+        std::nullopt_t AddError(std::string&& message) noexcept;
         const std::vector<Error> &GetErrors() const noexcept;
 
         std::optional<std::vector<KeyValue>>
@@ -91,7 +91,9 @@ public:
         std::vector<Error> m_errors;
     };
 
-    sqlite3 *InitializeStorage(DBTask& task) noexcept;
+    using DatabasePtr = std::unique_ptr<sqlite3, decltype(&sqlite3_close)>;
+
+    std::optional<sqlite3 *> InitializeStorage(DBTask &task) noexcept;
     ~DBStorage();
 
     template <typename TOnResolve, typename TOnReject>
@@ -110,7 +112,7 @@ public:
 private:
     static constexpr auto s_dbPathProperty = L"React-Native-Community-Async-Storage-Database-Path";
 
-    std::unique_ptr<sqlite3, decltype(&sqlite3_close)> m_db{nullptr, &sqlite3_close};
+    DatabasePtr m_db{nullptr, &sqlite3_close};
     winrt::slim_mutex m_lock;
     winrt::slim_condition_variable m_cv;
     winrt::Windows::Foundation::IAsyncAction m_action{nullptr};
