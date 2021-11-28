@@ -7,23 +7,29 @@
 #include "NativeModules.h"
 
 struct DBStorage {
-    struct Error {
-        std::string Message;
-    };
-
+    // To pass KeyValue pairs in the native module API.
+    // It has custom ReadValue and WriteValue to read/write to/from JSON.
     struct KeyValue {
         std::string Key;
         std::string Value;
     };
 
+    // An Error object for the native module API.
+    // It has a custom WriteValue to write to JSON.
+    struct Error {
+        std::string Message;
+    };
+
+    // An error list shared between Promise and DBTask.
     struct ErrorHandler {
         std::nullopt_t AddError(std::string &&message) noexcept;
-        std::vector<Error> &GetErrors() noexcept;
+        const std::vector<Error> &GetErrors() const noexcept;
 
     private:
         std::vector<Error> m_errors;
     };
 
+    // Ensure that only one result onResolve or onReject callback is called once.
     template <typename TOnResolve, typename TOnReject>
     struct Promise {
 
@@ -53,7 +59,13 @@ struct DBStorage {
 
         void Reject() noexcept
         {
-            Complete([&] { m_onReject(m_errorHandler.GetErrors()); });
+            Complete([&] {
+                // Ensure that we have at least one error on rejection.
+                if (m_errorHandler.GetErrors().empty()) {
+                    m_errorHandler.AddError("Promise is rejected.");
+                }
+                m_onReject(m_errorHandler.GetErrors());
+            });
         }
 
         template <typename TValue>
@@ -82,6 +94,7 @@ struct DBStorage {
         TOnReject m_onReject;
     };
 
+    // An asynchronous task that run in a background thread.
     struct DBTask {
         DBTask(ErrorHandler &errorHandler,
                std::function<void(DBTask &task, sqlite3 *db)> &&onRun) noexcept;
