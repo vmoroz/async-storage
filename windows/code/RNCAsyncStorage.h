@@ -25,11 +25,7 @@ namespace winrt::ReactNativeAsyncStorage::implementation
                 [callback](const std::vector<DBStorage::Error> &errors) { callback(errors, {}); });
             m_dbStorage.AddTask(
                 [promise, keys = std::move(keys)](DBStorage::DBTask &task, sqlite3 *db) noexcept {
-                    if (auto result = task.MultiGet(db, keys)) {
-                        promise->Resolve(*result);
-                    } else {
-                        promise->Reject(task.GetErrors());
-                    }
+                    promise->ResolveOrReject(task.MultiGet(db, keys), task.GetErrors());
                 },
                 [promise](DBStorage::DBTask &task) noexcept { promise->Reject(task.GetErrors()); });
         }
@@ -45,11 +41,7 @@ namespace winrt::ReactNativeAsyncStorage::implementation
             m_dbStorage.AddTask(
                 [promise, keyValues = std::move(keyValues)](DBStorage::DBTask &task,
                                                             sqlite3 *db) noexcept {
-                    if (auto result = task.MultiSet(db, keyValues)) {
-                        promise->Resolve(*result);
-                    } else {
-                        promise->Reject(task.GetErrors());
-                    }
+                    promise->ResolveOrReject(task.MultiSet(db, keyValues), task.GetErrors());
                 },
                 [promise](DBStorage::DBTask &task) noexcept { promise->Reject(task.GetErrors()); });
         }
@@ -65,11 +57,7 @@ namespace winrt::ReactNativeAsyncStorage::implementation
             m_dbStorage.AddTask(
                 [promise, keyValues = std::move(keyValues)](DBStorage::DBTask &task,
                                                             sqlite3 *db) noexcept {
-                    if (auto result = task.MultiMerge(db, keyValues)) {
-                        promise->Resolve(*result);
-                    } else {
-                        promise->Reject(task.GetErrors());
-                    }
+                    promise->ResolveOrReject(task.MultiMerge(db, keyValues), task.GetErrors());
                 },
                 [promise](DBStorage::DBTask &task) noexcept { promise->Reject(task.GetErrors()); });
         }
@@ -84,11 +72,7 @@ namespace winrt::ReactNativeAsyncStorage::implementation
                 [callback](const std::vector<DBStorage::Error> &errors) { callback(errors); });
             m_dbStorage.AddTask(
                 [promise, keys = std::move(keys)](DBStorage::DBTask &task, sqlite3 *db) noexcept {
-                    if (auto result = task.MultiRemove(db, keys)) {
-                        promise->Resolve(*result);
-                    } else {
-                        promise->Reject(task.GetErrors());
-                    }
+                    promise->ResolveOrReject(task.MultiRemove(db, keys), task.GetErrors());
                 },
                 [promise](DBStorage::DBTask &task) noexcept { promise->Reject(task.GetErrors()); });
         }
@@ -101,15 +85,11 @@ namespace winrt::ReactNativeAsyncStorage::implementation
             auto promise = DBStorage::CreatePromise(
                 [callback](const std::vector<std::string> &keys) { callback(std::nullopt, keys); },
                 [callback](const std::vector<DBStorage::Error> &errors) {
-                    callback(errors[0], {});
+                    callback(errors.at(0), {});
                 });
             m_dbStorage.AddTask(
                 [promise](DBStorage::DBTask &task, sqlite3 *db) noexcept {
-                    if (auto result = task.GetAllKeys(db)) {
-                        promise->Resolve(*result);
-                    } else {
-                        promise->Reject(task.GetErrors());
-                    }
+                    promise->ResolveOrReject(task.GetAllKeys(db), task.GetErrors());
                 },
                 [promise](DBStorage::DBTask &task) noexcept { promise->Reject(task.GetErrors()); });
         }
@@ -118,16 +98,14 @@ namespace winrt::ReactNativeAsyncStorage::implementation
         void
         clear(std::function<void(const std::optional<DBStorage::Error> &error)> &&callback) noexcept
         {
-            auto promise = DBStorage::CreatePromise(
-                [callback](bool /*value*/) { callback(std::nullopt); },
-                [callback](const std::vector<DBStorage::Error> &errors) { callback(errors[0]); });
+            auto promise =
+                DBStorage::CreatePromise([callback](bool /*value*/) { callback(std::nullopt); },
+                                         [callback](const std::vector<DBStorage::Error> &errors) {
+                                             callback(errors.at(0));
+                                         });
             m_dbStorage.AddTask(
                 [promise](DBStorage::DBTask &task, sqlite3 *db) noexcept {
-                    if (auto result = task.RemoveAll(db)) {
-                        promise->Resolve(true);
-                    } else {
-                        promise->Reject(task.GetErrors());
-                    }
+                    promise->ResolveOrReject(task.RemoveAll(db), task.GetErrors());
                 },
                 [promise](DBStorage::DBTask &task) noexcept { promise->Reject(task.GetErrors()); });
         }

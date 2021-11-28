@@ -45,6 +45,19 @@ public:
             Complete([&] { m_onReject(errors); });
         }
 
+        template <typename TValue>
+        void ResolveOrReject(const std::optional<TValue> &value,
+                             const std::vector<Error> &errors) noexcept
+        {
+            Complete([&] {
+                if (value) {
+                    m_onResolve(*value);
+                } else {
+                    m_onReject(errors);
+                }
+            });
+        }
+
     private:
         template <typename Fn>
         void Complete(Fn &&fn)
