@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.
+std  // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 #include "pch.h"
 
@@ -6,7 +6,7 @@
 
 #include <unordered_map>
 
-namespace winrt
+    namespace winrt
 {
     using namespace Microsoft::ReactNative;
     using namespace Windows::ApplicationModel::Core;
@@ -60,7 +60,7 @@ namespace
     // Execute the provided SQLite statement (and optional execCallback & user data
     // in callbackData). On error, reports it to the callback and returns false.
     std::optional<bool> Exec(sqlite3 *db,
-                             DBStorage::DBTask &task,
+                             DBStorage::ErrorHandler &errorHandler,
                              const char *statement,
                              ExecCallback execCallback = nullptr,
                              void *callbackData = nullptr) noexcept
@@ -68,10 +68,10 @@ namespace
         auto errMsg = std::unique_ptr<char, decltype(&sqlite3_free)>{nullptr, &sqlite3_free};
         int rc = sqlite3_exec(db, statement, execCallback, callbackData, &errMsg);
         if (errMsg) {
-            return task.AddError(errMsg.get());
+            return errorHandler.AddError(errMsg.get());
         }
         if (rc != SQLITE_OK) {
-            return task.AddError(sqlite3_errmsg(db));
+            return errorHandler.AddError(sqlite3_errmsg(db));
         }
         return true;
     }
@@ -79,11 +79,11 @@ namespace
     // Convenience wrapper for using Exec with lambda expressions
     template <typename Fn>
     std::optional<bool>
-    Exec(sqlite3 *db, DBStorage::DBTask &task, const char *statement, Fn &fn) noexcept
+    Exec(sqlite3 *db, DBStorage::ErrorHandler &errorHandler, const char *statement, Fn &fn) noexcept
     {
         return Exec(
             db,
-            task,
+            errorHandler,
             statement,
             [](void *callbackData, int columnCount, char **columnTexts, char **columnNames) {
                 return (*static_cast<Fn *>(callbackData))(columnCount, columnTexts, columnNames);
@@ -95,8 +95,8 @@ namespace
     // SQLITE_LIMIT_VARIABLE_NUMBER, and that every member of args is a string.
     // Invokes callback to report an error and returns false.
     std::optional<bool> CheckArgs(sqlite3 *db,
-                                  const std::vector<std::string> &args,
-                                  DBStorage::DBTask &task) noexcept
+                                  DBStorage::ErrorHandler &errorHandler,
+                                  const std::vector<std::string> &args) noexcept
     {
         int varLimit = sqlite3_limit(db, SQLITE_LIMIT_VARIABLE_NUMBER, -1);
         auto argCount = args.size();
@@ -104,11 +104,11 @@ namespace
             static_cast<int>(argCount) > varLimit) {
             char errorMsg[60];
             sprintf_s(errorMsg, "Too many keys. Maximum supported keys :%d.", varLimit);
-            return task.AddError(errorMsg);
+            return errorHandler.AddError(errorMsg);
         }
         for (int i = 0; i < static_cast<int>(argCount); i++) {
             if (args[i].empty()) {
-                return task.AddError("Invalid key type. Expected a string.");
+                return errorHandler.AddError("Invalid key type. Expected a string.");
             }
         }
         return true;
@@ -119,11 +119,11 @@ namespace
     // The provided SQLite connection handle & Callback must outlive
     // the Sqlite3Transaction object
     struct Sqlite3Transaction {
-        Sqlite3Transaction(sqlite3 *db, DBStorage::DBTask &task) noexcept : m_db(db), m_task(&task)
+        Sqlite3Transaction(sqlite3 *db, DBStorage::ErrorHandler &errorHandler) noexcept
+            : m_db(db), m_errorHandler(errorHandler)
         {
-            if (!Exec(m_db, *m_task, "BEGIN TRANSACTION")) {
+            if (!Exec(m_db, m_errorHandler, "BEGIN TRANSACTION")) {
                 m_db = nullptr;
-                m_task = nullptr;
             }
         }
 
@@ -143,7 +143,7 @@ namespace
         std::optional<bool> Commit() noexcept
         {
             if (m_db) {
-                return Exec(std::exchange(m_db, nullptr), *m_task, "COMMIT");
+                return Exec(std::exchange(m_db, nullptr), m_errorHandler, "COMMIT");
             }
             return std::nullopt;
         }
@@ -151,14 +151,14 @@ namespace
         std::optional<bool> Rollback() noexcept
         {
             if (m_db) {
-                return Exec(std::exchange(m_db, nullptr), *m_task, "ROLLBACK");
+                return Exec(std::exchange(m_db, nullptr), m_errorHandler, "ROLLBACK");
             }
             return std::nullopt;
         }
 
     private:
         sqlite3 *m_db{};
-        DBStorage::DBTask *m_task{};
+        DBStorage::ErrorHandler &m_errorHandler;
     };
 
     // Appends argCount variables to prefix in a comma-separated list.
@@ -178,13 +178,13 @@ namespace
     // Checks if sqliteResult is SQLITE_OK. If not, reports the error via
     // callback & returns false.
     std::optional<bool> CheckSQLiteResult(sqlite3 *db,
-                                          DBStorage::DBTask &task,
+                                          DBStorage::ErrorHandler &errorHandler,
                                           int sqliteResult) noexcept
     {
         if (sqliteResult == SQLITE_OK) {
             return true;
         } else {
-            return task.AddError(sqlite3_errmsg(db));
+            return errorHandler.AddError(sqlite3_errmsg(db));
         }
     }
 
@@ -192,22 +192,23 @@ namespace
 
     // Creates a prepared SQLite statement. On error, returns nullptr
     std::optional<bool> PrepareStatement(sqlite3 *db,
-                                         DBStorage::DBTask &task,
+                                         DBStorage::ErrorHandler &errorHandler,
                                          const char *stmtText,
                                          sqlite3_stmt **stmt) noexcept
     {
-        return CheckSQLiteResult(db, task, sqlite3_prepare_v2(db, stmtText, -1, stmt, nullptr));
+        return CheckSQLiteResult(
+            db, errorHandler, sqlite3_prepare_v2(db, stmtText, -1, stmt, nullptr));
     }
 
     // Binds the index-th variable in this prepared statement to str.
     std::optional<bool> BindString(sqlite3 *db,
-                                   DBStorage::DBTask &task,
+                                   DBStorage::ErrorHandler &errorHandler,
                                    sqlite3_stmt *stmt,
                                    int index,
                                    const std::string &str) noexcept
     {
         return CheckSQLiteResult(
-            db, task, sqlite3_bind_text(stmt, index, str.c_str(), -1, SQLITE_TRANSIENT));
+            db, errorHandler, sqlite3_bind_text(stmt, index, str.c_str(), -1, SQLITE_TRANSIENT));
     }
 
     // Merge source into destination.
@@ -232,7 +233,8 @@ namespace
     }
 }  // namespace
 
-std::optional<sqlite3 *> DBStorage::InitializeStorage(DBStorage::DBTask &task) noexcept
+std::optional<sqlite3 *>
+DBStorage::InitializeStorage(DBStorage::ErrorHandler &errorHandler) noexcept
 {
     winrt::slim_lock_guard guard{m_lock};
     if (m_db) {
@@ -249,11 +251,10 @@ std::optional<sqlite3 *> DBStorage::InitializeStorage(DBStorage::DBTask &task) n
             path = winrt::to_string(localAppDataPath) + "\\AsyncStorage.db";
         }
     } catch (const winrt::hresult_error &error) {
-        task.AddError(winrt::to_string(error.message()));
-        task.AddError(
+        errorHandler.AddError(winrt::to_string(error.message()));
+        return errorHandler.AddError(
             "Please specify 'React-Native-Community-Async-Storage-Database-Path' in "
             "CoreApplication::Properties");
-        return nullptr;
     }
 
     auto db = DatabasePtr{nullptr, &sqlite3_close};
@@ -261,7 +262,7 @@ std::optional<sqlite3 *> DBStorage::InitializeStorage(DBStorage::DBTask &task) n
                         &db,
                         SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX,
                         nullptr) != SQLITE_OK) {
-        return task.AddError(sqlite3_errmsg(db.get()));
+        return errorHandler.AddError(sqlite3_errmsg(db.get()));
     }
 
     int userVersion = 0;
@@ -275,12 +276,12 @@ std::optional<sqlite3 *> DBStorage::InitializeStorage(DBStorage::DBTask &task) n
         };
 
     CHECK_STATUS(
-        Exec(db.get(), task, "PRAGMA user_version", getUserVersionCallback, &userVersion));
+        Exec(db.get(), errorHandler, "PRAGMA user_version", getUserVersionCallback, &userVersion));
 
     if (userVersion == 0) {
         CHECK_STATUS(
             Exec(db.get(),
-                 task,
+                 errorHandler,
                  "CREATE TABLE IF NOT EXISTS AsyncLocalStorage(key TEXT PRIMARY KEY, value TEXT "
                  "NOT NULL); PRAGMA user_version=1"));
     }
@@ -308,11 +309,11 @@ DBStorage::~DBStorage()
 
 // Under the lock, add a task to m_tasks and, if no async task is in progress,
 // schedule it
-void DBStorage::AddTask(std::function<void(DBStorage::DBTask &task, sqlite3 *db)> onRun,
-                        std::function<void(DBStorage::DBTask &task)> onCancel) noexcept
+void DBStorage::AddTask(ErrorHandler &errorHandler,
+                        std::function<void(DBStorage::DBTask &task, sqlite3 *db)> &&onRun) noexcept
 {
     winrt::slim_lock_guard guard(m_lock);
-    m_tasks.push_back(std::make_unique<DBTask>(std::move(onRun), std::move(onCancel)));
+    m_tasks.push_back(std::make_unique<DBTask>(errorHandler, std::move(onRun)));
     if (!m_action) {
         m_action = RunTasks();
     }
@@ -356,32 +357,27 @@ winrt::Windows::Foundation::IAsyncAction DBStorage::RunTasks() noexcept
     m_cv.notify_all();
 }
 
-DBStorage::DBTask::DBTask(std::function<void(DBTask &task, sqlite3 *db)> &&onRun,
-                          std::function<void(DBTask &task)> &&onCancel) noexcept
-    : m_onRun(std::move(onRun)), m_onCancel(std::move(onCancel))
-{
-}
-
-DBStorage::DBTask::~DBTask() noexcept
-{
-    Cancel();
-}
-
-std::nullopt_t DBStorage::DBTask::AddError(std::string &&message) noexcept
+std::nullopt_t DBStorage::ErrorHandler::AddError(std::string &&message) noexcept
 {
     m_errors.push_back(Error{std::move(message)});
     return std::nullopt;
 }
 
-const std::vector<DBStorage::Error> &DBStorage::DBTask::GetErrors() const noexcept
+std::vector<DBStorage::Error> &DBStorage::ErrorHandler::GetErrors() noexcept
 {
     return m_errors;
+}
+
+DBStorage::DBTask::DBTask(DBStorage::ErrorHandler &errorHandler,
+                          std::function<void(DBTask &task, sqlite3 *db)> &&onRun) noexcept
+    : m_errorHandler(errorHandler), m_onRun(std::move(onRun))
+{
 }
 
 void DBStorage::DBTask::Run(DBStorage &storage, sqlite3 *db) noexcept
 {
     if (!db) {
-        if (auto res = storage.InitializeStorage(*this)) {
+        if (auto res = storage.InitializeStorage(m_errorHandler)) {
             db = *res;
         }
     }
@@ -392,45 +388,44 @@ void DBStorage::DBTask::Run(DBStorage &storage, sqlite3 *db) noexcept
 
 void DBStorage::DBTask::Cancel() noexcept
 {
-    if (m_errors.empty()) {
-        AddError("Task is canceled");
+    if (m_errorHandler.GetErrors().empty()) {
+        m_errorHandler.AddError("Task is canceled");
     }
-    m_onCancel(*this);
 }
 
 std::optional<std::vector<DBStorage::KeyValue>>
 DBStorage::DBTask::MultiGet(sqlite3 *db, const std::vector<std::string> &keys) noexcept
 {
-    CHECK_STATUS(GetErrors().empty());
+    CHECK_STATUS(m_errorHandler.GetErrors().empty());
     if (keys.empty()) {
         return std::vector<DBStorage::KeyValue>();  // nothing to do
     }
 
-    CHECK_STATUS(CheckArgs(db, keys, *this));
+    CHECK_STATUS(CheckArgs(db, m_errorHandler, keys));
 
     auto argCount = static_cast<int>(keys.size());
     auto sql = MakeSQLiteParameterizedStatement(
         "SELECT key, value FROM AsyncLocalStorage WHERE key IN ", argCount);
     auto stmt = StatementPtr{nullptr, &sqlite3_finalize};
-    CHECK_STATUS(PrepareStatement(db, *this, sql.c_str(), &stmt));
+    CHECK_STATUS(PrepareStatement(db, m_errorHandler, sql.c_str(), &stmt));
     for (int i = 0; i < argCount; i++) {
-        CHECK_STATUS(BindString(db, *this, stmt.get(), i + 1, keys[i]));
+        CHECK_STATUS(BindString(db, m_errorHandler, stmt.get(), i + 1, keys[i]));
     }
 
     std::vector<DBStorage::KeyValue> result;
     for (auto stepResult = sqlite3_step(stmt.get()); stepResult != SQLITE_DONE;
          stepResult = sqlite3_step(stmt.get())) {
         if (stepResult != SQLITE_ROW) {
-            return AddError(sqlite3_errmsg(db));
+            return m_errorHandler.AddError(sqlite3_errmsg(db));
         }
 
         auto key = reinterpret_cast<const char *>(sqlite3_column_text(stmt.get(), 0));
         if (!key) {
-            return AddError(sqlite3_errmsg(db));
+            return m_errorHandler.AddError(sqlite3_errmsg(db));
         }
         auto value = reinterpret_cast<const char *>(sqlite3_column_text(stmt.get(), 1));
         if (!value) {
-            return AddError(sqlite3_errmsg(db));
+            return m_errorHandler.AddError(sqlite3_errmsg(db));
         }
         result.push_back(KeyValue{key, value});
     }
@@ -440,22 +435,22 @@ DBStorage::DBTask::MultiGet(sqlite3 *db, const std::vector<std::string> &keys) n
 std::optional<bool> DBStorage::DBTask::MultiSet(sqlite3 *db,
                                                 const std::vector<KeyValue> &keyValues) noexcept
 {
-    CHECK_STATUS(GetErrors().empty());
+    CHECK_STATUS(m_errorHandler.GetErrors().empty());
     if (keyValues.empty()) {
         return true;  // nothing to do
     }
 
-    Sqlite3Transaction transaction(db, *this);
+    Sqlite3Transaction transaction(db, m_errorHandler);
     CHECK_STATUS(transaction);
     auto stmt = StatementPtr{nullptr, &sqlite3_finalize};
     CHECK_STATUS(PrepareStatement(
-        db, *this, "INSERT OR REPLACE INTO AsyncLocalStorage VALUES(?, ?)", &stmt));
+        db, m_errorHandler, "INSERT OR REPLACE INTO AsyncLocalStorage VALUES(?, ?)", &stmt));
     for (const auto &keyValue : keyValues) {
-        CHECK_STATUS(BindString(db, *this, stmt.get(), 1, keyValue.Key));
-        CHECK_STATUS(BindString(db, *this, stmt.get(), 2, keyValue.Value));
+        CHECK_STATUS(BindString(db, m_errorHandler, stmt.get(), 1, keyValue.Key));
+        CHECK_STATUS(BindString(db, m_errorHandler, stmt.get(), 2, keyValue.Value));
         auto rc = sqlite3_step(stmt.get());
-        CHECK_STATUS(rc == SQLITE_DONE || CheckSQLiteResult(db, *this, rc));
-        CHECK_STATUS(CheckSQLiteResult(db, *this, sqlite3_reset(stmt.get())));
+        CHECK_STATUS(rc == SQLITE_DONE || CheckSQLiteResult(db, m_errorHandler, rc));
+        CHECK_STATUS(CheckSQLiteResult(db, m_errorHandler, sqlite3_reset(stmt.get())));
     }
     CHECK_STATUS(transaction.Commit());
     return true;
@@ -464,7 +459,7 @@ std::optional<bool> DBStorage::DBTask::MultiSet(sqlite3 *db,
 std::optional<bool> DBStorage::DBTask::MultiMerge(sqlite3 *db,
                                                   const std::vector<KeyValue> &keyValues) noexcept
 {
-    CHECK_STATUS(GetErrors().empty());
+    CHECK_STATUS(m_errorHandler.GetErrors().empty());
     if (keyValues.empty()) {
         return true;  // nothing to do
     }
@@ -493,30 +488,30 @@ std::optional<bool> DBStorage::DBTask::MultiMerge(sqlite3 *db,
             MergeJsonObjects(oldJson, newJson);
             mergedResults.push_back(KeyValue{key, winrt::to_string(oldJson.ToString())});
         } else {
-            return AddError("Values must be valid JSON object strings");
+            return m_errorHandler.AddError("Values must be valid JSON object strings");
         }
     }
 
-    return MultiSet(db, std::move(mergedResults));
+    return MultiSet(db, mergedResults);
 }
 
 std::optional<bool> DBStorage::DBTask::MultiRemove(sqlite3 *db,
                                                    const std::vector<std::string> &keys) noexcept
 
 {
-    CHECK_STATUS(GetErrors().empty());
+    CHECK_STATUS(m_errorHandler.GetErrors().empty());
     if (keys.empty()) {
         return true;  // nothing to do
     }
 
-    CHECK_STATUS(CheckArgs(db, keys, *this));
+    CHECK_STATUS(CheckArgs(db, m_errorHandler, keys));
     auto argCount = static_cast<int>(keys.size());
     auto sql =
         MakeSQLiteParameterizedStatement("DELETE FROM AsyncLocalStorage WHERE key IN ", argCount);
     auto stmt = StatementPtr{nullptr, &sqlite3_finalize};
-    CHECK_STATUS(PrepareStatement(db, *this, sql.data(), &stmt));
+    CHECK_STATUS(PrepareStatement(db, m_errorHandler, sql.data(), &stmt));
     for (int i = 0; i < argCount; i++) {
-        CHECK_STATUS(BindString(db, *this, stmt.get(), i + 1, keys[i]));
+        CHECK_STATUS(BindString(db, m_errorHandler, stmt.get(), i + 1, keys[i]));
     }
     for (;;) {
         auto stepResult = sqlite3_step(stmt.get());
@@ -524,7 +519,7 @@ std::optional<bool> DBStorage::DBTask::MultiRemove(sqlite3 *db,
             break;
         }
         if (stepResult != SQLITE_ROW) {
-            return AddError(sqlite3_errmsg(db));
+            return m_errorHandler.AddError(sqlite3_errmsg(db));
         }
     }
     return true;
@@ -532,7 +527,7 @@ std::optional<bool> DBStorage::DBTask::MultiRemove(sqlite3 *db,
 
 std::optional<std::vector<std::string>> DBStorage::DBTask::GetAllKeys(sqlite3 *db) noexcept
 {
-    CHECK_STATUS(GetErrors().empty());
+    CHECK_STATUS(m_errorHandler.GetErrors().empty());
     std::vector<std::string> result;
     auto getAllKeysCallback = [&](int columnCount, char **columnTexts, char **) {
         if (columnCount > 0) {
@@ -541,14 +536,14 @@ std::optional<std::vector<std::string>> DBStorage::DBTask::GetAllKeys(sqlite3 *d
         return SQLITE_OK;
     };
 
-    CHECK_STATUS(Exec(db, *this, "SELECT key FROM AsyncLocalStorage", getAllKeysCallback));
+    CHECK_STATUS(Exec(db, m_errorHandler, "SELECT key FROM AsyncLocalStorage", getAllKeysCallback));
     return result;
 }
 
 std::optional<bool> DBStorage::DBTask::RemoveAll(sqlite3 *db) noexcept
 {
-    CHECK_STATUS(GetErrors().empty());
-    CHECK_STATUS(Exec(db, *this, "DELETE FROM AsyncLocalStorage"));
+    CHECK_STATUS(m_errorHandler.GetErrors().empty());
+    CHECK_STATUS(Exec(db, m_errorHandler, "DELETE FROM AsyncLocalStorage"));
     return true;
 }
 

@@ -6,9 +6,7 @@
 
 #include "NativeModules.h"
 
-class DBStorage
-{
-public:
+struct DBStorage {
     struct Error {
         std::string Message;
     };
@@ -16,6 +14,14 @@ public:
     struct KeyValue {
         std::string Key;
         std::string Value;
+    };
+
+    struct ErrorHandler {
+        std::nullopt_t AddError(std::string &&message) noexcept;
+        std::vector<Error> &GetErrors() noexcept;
+
+    private:
+        std::vector<Error> m_errors;
     };
 
     template <typename TOnResolve, typename TOnReject>
@@ -28,11 +34,16 @@ public:
 
         ~Promise()
         {
-            VerifyElseCrash(m_isCompleted.test_and_set());
+            Reject();
         }
 
         Promise(const Promise &other) = delete;
         Promise &operator=(const Promise &other) = delete;
+
+        ErrorHandler &GetErrorHandler() noexcept
+        {
+            return m_errorHandler;
+        }
 
         template <typename TValue>
         void Resolve(const TValue &value) noexcept
@@ -40,22 +51,19 @@ public:
             Complete([&] { m_onResolve(value); });
         }
 
-        void Reject(const std::vector<Error> &errors) noexcept
+        void Reject() noexcept
         {
-            Complete([&] { m_onReject(errors); });
+            Complete([&] { m_onReject(m_errorHandler.GetErrors()); });
         }
 
         template <typename TValue>
-        void ResolveOrReject(const std::optional<TValue> &value,
-                             const std::vector<Error> &errors) noexcept
+        void ResolveOrReject(const std::optional<TValue> &value) noexcept
         {
-            Complete([&] {
-                if (value) {
-                    m_onResolve(*value);
-                } else {
-                    m_onReject(errors);
-                }
-            });
+            if (value) {
+                Resolve(*value);
+            } else {
+                Reject();
+            }
         }
 
     private:
@@ -68,26 +76,22 @@ public:
         }
 
     private:
+        ErrorHandler m_errorHandler;
         std::atomic_flag m_isCompleted{false};
         TOnResolve m_onResolve;
         TOnReject m_onReject;
     };
 
     struct DBTask {
-        DBTask(std::function<void(DBTask &task, sqlite3 *db)> &&onRun,
-               std::function<void(DBTask &task)> &&onCancel) noexcept;
+        DBTask(ErrorHandler &errorHandler,
+               std::function<void(DBTask &task, sqlite3 *db)> &&onRun) noexcept;
 
         DBTask() = default;
         DBTask(const DBTask &) = delete;
         DBTask &operator=(const DBTask &) = delete;
 
-        ~DBTask();
-
         void Run(DBStorage &storage, sqlite3 *db) noexcept;
         void Cancel() noexcept;
-
-        std::nullopt_t AddError(std::string&& message) noexcept;
-        const std::vector<Error> &GetErrors() const noexcept;
 
         std::optional<std::vector<KeyValue>>
         MultiGet(sqlite3 *db, const std::vector<std::string> &keys) noexcept;
@@ -100,13 +104,12 @@ public:
 
     private:
         std::function<void(DBTask &task, sqlite3 *db)> m_onRun;
-        std::function<void(DBTask &task)> m_onCancel;
-        std::vector<Error> m_errors;
+        ErrorHandler &m_errorHandler;
     };
 
     using DatabasePtr = std::unique_ptr<sqlite3, decltype(&sqlite3_close)>;
 
-    std::optional<sqlite3 *> InitializeStorage(DBTask &task) noexcept;
+    std::optional<sqlite3 *> InitializeStorage(DBStorage::ErrorHandler &errorHandler) noexcept;
     ~DBStorage();
 
     template <typename TOnResolve, typename TOnReject>
@@ -117,8 +120,8 @@ public:
                                              std::forward<TOnReject>(onReject));
     }
 
-    void AddTask(std::function<void(DBStorage::DBTask &task, sqlite3 *db)> onRun,
-                 std::function<void(DBStorage::DBTask &task)> onCancel) noexcept;
+    void AddTask(ErrorHandler &errorHandler,
+                 std::function<void(DBStorage::DBTask &task, sqlite3 *db)> &&onRun) noexcept;
 
     winrt::Windows::Foundation::IAsyncAction RunTasks() noexcept;
 
