@@ -275,11 +275,11 @@ std::optional<sqlite3 *> DBStorage::InitializeStorage(DBStorage::DBTask &task) n
         };
 
     CHECK_STATUS(
-        Exec(m_db.get(), task, "PRAGMA user_version", getUserVersionCallback, &userVersion));
+        Exec(db.get(), task, "PRAGMA user_version", getUserVersionCallback, &userVersion));
 
     if (userVersion == 0) {
         CHECK_STATUS(
-            Exec(m_db.get(),
+            Exec(db.get(),
                  task,
                  "CREATE TABLE IF NOT EXISTS AsyncLocalStorage(key TEXT PRIMARY KEY, value TEXT "
                  "NOT NULL); PRAGMA user_version=1"));
