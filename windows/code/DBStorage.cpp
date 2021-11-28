@@ -1,4 +1,4 @@
-std  // Copyright (c) Microsoft Corporation.
+// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 #include "pch.h"
 
@@ -6,7 +6,7 @@ std  // Copyright (c) Microsoft Corporation.
 
 #include <unordered_map>
 
-    namespace winrt
+namespace winrt
 {
     using namespace Microsoft::ReactNative;
     using namespace Windows::ApplicationModel::Core;
